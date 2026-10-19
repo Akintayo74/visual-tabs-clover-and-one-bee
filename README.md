@@ -45,6 +45,35 @@ pnpm build   # production build into extension/.output/chrome-mv3
 
 After a rebuild, click the reload icon on the extension's card in `chrome://extensions`.
 
+### Using it
+
+| Action                    | How                                                                       |
+| ------------------------- | ------------------------------------------------------------------------- |
+| Save the current page     | `Alt+Shift+S`, or click the toolbar button                                |
+| Save and close the tab    | `Alt+Shift+X`, or right-click the toolbar button → **Save and close tab** |
+| Browse saves              | Open a new tab                                                            |
+| Move between cards        | Arrow keys, `Home`, `End`                                                 |
+| Open a card's detail view | `Enter` or click                                                          |
+| Close the detail view     | `Esc`                                                                     |
+
+Change the shortcuts at `chrome://extensions/shortcuts`. Chrome only assigns a suggested
+shortcut if nothing else uses it, so check that page if a shortcut does nothing.
+
+Saving captures the visible part of the page, reads the page's structure, and stores both in
+IndexedDB before showing **Saved**. The WebP versions are made afterwards; a card shows
+**Processing…** until then, or **Failed** with a **Retry** button. Saving the same page again
+replaces its snapshot rather than adding a duplicate. Browser pages, the Chrome Web Store, PDFs
+and local files can't be saved; you get a notification saying so.
+
+### Permissions
+
+- `activeTab`, `scripting`: pressing the shortcut or the toolbar button lets the extension
+  capture and read only the tab you're on. It has no standing access to any site.
+- `contextMenus`: the **Save and close tab** item on the toolbar button.
+- `notifications`: tells you when a page can't be saved (there is no page to show a toast on).
+- `favicon`: shows site icons from Chrome's cache, so they work offline.
+- `unlimitedStorage`: screenshots add up; without it Chrome may evict IndexedDB data.
+
 ## Local Supabase
 
 ```sh
@@ -78,6 +107,17 @@ pnpm exec supabase functions deploy <name>             # needs `supabase link` f
 
 There are no functions yet; they arrive in Phase 4.
 
+## How saves are stored
+
+All data lives in the extension's IndexedDB database `visual-memory` (see
+`extension/src/lib/db.ts`):
+
+- `saves`: one small record per site (URL, title, status, palette, fonts). The new tab loads all
+  of these at once.
+- `fingerprints`: the page structure read at save time, loaded only in the detail view.
+- `images`: `raw` (the capture as taken, kept until processing succeeds), `full` (up to 2400px
+  wide, WebP) and `card` (960px, WebP).
+
 ## Checks
 
 ```sh
@@ -86,11 +126,15 @@ pnpm format:check    # Prettier (pnpm format to fix)
 pnpm typecheck       # tsc --noEmit, strict
 pnpm test            # Vitest unit tests
 pnpm check           # all of the above
-pnpm --filter extension e2e   # builds, loads the extension in Chromium, checks the new tab
+pnpm --filter extension e2e   # browser tests: saves, the wall, fingerprints (Chromium)
 ```
 
-The e2e test uses Playwright's Chromium (`pnpm --filter extension exec playwright install chromium`).
-Set `CHROMIUM_PATH` to use a different Chromium binary.
+The e2e tests use Playwright's Chromium (`pnpm --filter extension exec playwright install chromium`).
+Set `CHROMIUM_PATH` to use a different Chromium binary. They load a separate build
+(`wxt build --mode e2e`, output in `.output/chrome-mv3-e2e`) that adds `<all_urls>` host access,
+because a test can't press a keyboard shortcut to grant `activeTab`. Don't load that build for
+real use. The test sites are generated locally (`extension/e2e/support/sites.ts`), so the suite
+runs offline.
 
 CI runs all of these on every pull request, plus `supabase db start` to make sure every migration
 applies.
