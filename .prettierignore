@@ -1,0 +1,9 @@
+pnpm-lock.yaml
+.output/
+.wxt/
+node_modules/
+supabase/.temp/
+test-results/
+playwright-report/
+CLAUDE.md
+PLAN.md

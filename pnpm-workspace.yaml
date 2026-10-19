@@ -1,0 +1,6 @@
+packages:
+  - extension
+onlyBuiltDependencies:
+  - esbuild
+  - spawn-sync
+  - supabase

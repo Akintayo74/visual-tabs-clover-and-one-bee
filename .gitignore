@@ -1,0 +1,16 @@
+node_modules/
+.output/
+.wxt/
+dist/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+# Supabase local state
+supabase/.branches
+supabase/.temp
+supabase/functions/.env
+test-results/
+playwright-report/
