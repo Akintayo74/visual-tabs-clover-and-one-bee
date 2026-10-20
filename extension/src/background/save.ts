@@ -72,7 +72,7 @@ async function fingerprint(tabId: number): Promise<Fingerprint | null> {
 }
 
 /** Never waits longer than TOAST_TIMEOUT_MS, so a busy page can't hold up a save. */
-async function toast(tabId: number, state: ToastState, message: string): Promise<void> {
+async function showToast(tabId: number, state: ToastState, message: string): Promise<void> {
   const injection = browser.scripting
     .executeScript({
       target: { tabId },
@@ -89,7 +89,7 @@ async function toast(tabId: number, state: ToastState, message: string): Promise
 let badgeTimer: ReturnType<typeof setTimeout> | undefined;
 
 /** Shows `text` on the toolbar icon. Unlike the toast, this doesn't depend on the page. */
-async function flashBadge(text: string, color: string, { sticky = false } = {}): Promise<void> {
+async function setBadge(text: string, color: string, { sticky = false } = {}): Promise<void> {
   clearTimeout(badgeTimer);
   try {
     await browser.action.setBadgeBackgroundColor({ color });
@@ -104,8 +104,8 @@ async function flashBadge(text: string, color: string, { sticky = false } = {}):
   }
 }
 
-async function notifyFailure(title: string, message: string): Promise<void> {
-  await flashBadge('!', '#d93025');
+async function notifyUser(title: string, message: string): Promise<void> {
+  await setBadge('!', '#d93025');
   try {
     await browser.notifications.create({
       type: 'basic',
@@ -118,6 +118,16 @@ async function notifyFailure(title: string, message: string): Promise<void> {
   }
 }
 
+export interface SaveOptions {
+  /** Close the tab once the save is stored. */
+  close: boolean;
+  /** No toast, badge or notifications: the tab import reports progress itself. */
+  quiet?: boolean;
+}
+
+export const PAGE_DID_NOT_LOAD =
+  "This page can't be saved. It didn't load, or it's a PDF or protected page.";
+
 /**
  * Saves a tab: captures the visible viewport, reads the page fingerprint, writes everything
  * to IndexedDB, then shows feedback. Image processing continues afterwards. With
@@ -125,8 +135,11 @@ async function notifyFailure(title: string, message: string): Promise<void> {
  */
 export async function saveTab(
   tab: Browser.tabs.Tab,
-  { close }: { close: boolean },
+  { close, quiet = false }: SaveOptions,
 ): Promise<SaveOutcome> {
+  const notifyFailure = quiet ? async () => {} : notifyUser;
+  const flashBadge = quiet ? async () => {} : setBadge;
+  const toast = quiet ? async () => {} : showToast;
   const start = performance.now();
   const timings: Record<string, number> = {};
   const mark = (name: string) => (timings[name] = Math.round(performance.now() - start));
@@ -157,7 +170,7 @@ export async function saveTab(
 
     const canonicalUrl = fp?.canonicalUrl ?? null;
     const record = await upsertSnapshot({
-      dedupeKey: dedupeKey(url, canonicalUrl),
+      dedupeKey: dedupeKey(url),
       url,
       canonicalUrl,
       title: fp?.title || tab.title || displayDomain(url),
@@ -188,7 +201,7 @@ export async function saveTab(
     return { ok: true, id: record.id, timings };
   } catch (error) {
     if (error instanceof UnsupportedPageError) {
-      const why = "This page can't be saved. PDFs and protected pages aren't supported.";
+      const why = PAGE_DID_NOT_LOAD;
       await notifyFailure("Can't save this page", why);
       return { ok: false, reason: why };
     }
@@ -201,12 +214,19 @@ export async function saveTab(
 }
 
 const inFlight = new Map<string, Promise<void>>();
+// Each job decodes a full-resolution capture; running many at once (say, during a tab
+// import) would spike memory, so they queue.
+let processingQueue: Promise<unknown> = Promise.resolve();
 
 /** Turns the raw capture into the stored WebP versions. Safe to call repeatedly. */
 export function processSave(id: string): Promise<void> {
   const running = inFlight.get(id);
   if (running) return running;
-  const job = runProcessing(id).finally(() => inFlight.delete(id));
+  const job = processingQueue
+    .catch(() => undefined)
+    .then(() => runProcessing(id))
+    .finally(() => inFlight.delete(id));
+  processingQueue = job;
   inFlight.set(id, job);
   return job;
 }

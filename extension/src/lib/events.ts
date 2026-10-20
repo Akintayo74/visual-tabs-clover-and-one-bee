@@ -1,3 +1,5 @@
+import type { ImportMessage } from './import-state';
+
 /** Tells open new tabs that saves changed. Works between the service worker and extension pages. */
 const CHANNEL = 'visual-memory:saves';
 
@@ -20,4 +22,4 @@ export function subscribe(listener: (event: SavesEvent) => void): () => void {
 }
 
 /** Messages from extension pages to the service worker. */
-export type WorkerMessage = { type: 'retry'; id: string };
+export type WorkerMessage = { type: 'retry'; id: string } | ImportMessage;
