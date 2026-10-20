@@ -6,7 +6,14 @@
     <title>New Tab</title>
   </head>
   <body>
-    <div id="app"></div>
+    <main class="page">
+      <header class="topbar">
+        <h1 class="brand">Visual Memory</h1>
+        <span class="count" data-testid="count"></span>
+      </header>
+      <p class="empty" data-testid="empty" hidden></p>
+      <div class="wall" data-testid="wall"></div>
+    </main>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>
