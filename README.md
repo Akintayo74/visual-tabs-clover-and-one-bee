@@ -55,6 +55,8 @@ After a rebuild, click the reload icon on the extension's card in `chrome://exte
 | Move between cards        | Arrow keys, `Home`, `End`                                                 |
 | Open a card's detail view | `Enter` or click                                                          |
 | Close the detail view     | `Esc`                                                                     |
+| Import every open tab     | **Import open tabs** on the new tab                                       |
+| Cancel an import          | **Cancel** on the new tab, or click the toolbar button                    |
 
 Change the shortcuts at `chrome://extensions/shortcuts`. Chrome only assigns a suggested
 shortcut if nothing else uses it, so check that page if a shortcut does nothing.
@@ -62,13 +64,24 @@ shortcut if nothing else uses it, so check that page if a shortcut does nothing.
 Saving captures the visible part of the page, reads the page's structure, and stores both in
 IndexedDB before showing **Saved**. The WebP versions are made afterwards; a card shows
 **Processing…** until then, or **Failed** with a **Retry** button. Saving the same page again
-replaces its snapshot rather than adding a duplicate. Browser pages, the Chrome Web Store, PDFs
+replaces its snapshot rather than adding a duplicate. Pages are matched on their address with
+tracking parameters, `www.` and trailing slashes removed. Browser pages, the Chrome Web Store, PDFs
 and local files can't be saved; you get a notification saying so.
 
 The toolbar icon shows **…** as soon as the capture is taken and **✓** once the save is stored.
 The in-page toast needs the page's own main thread, so on a page that is busy (some animated
 sites block it for seconds after loading) the toast can be late, but the save never waits for
 it. Reading the page's structure gives up after 2 seconds; the save is kept without it.
+
+### Importing open tabs
+
+**Import open tabs** on the new tab saves every tab in that window. The extension activates each
+tab in turn, waits for it to load (up to 20s) plus 1.5s for it to settle, captures it, and moves
+on, so the window flips through your tabs while it runs. The toolbar badge shows progress. Tabs
+that can't be saved are skipped. When it finishes, it returns to the new tab and shows what was
+saved and why anything was skipped, with a button to close the saved tabs. A tab is only closed
+if it still shows the page that was saved. If Chrome stops the extension mid-import, the new tab
+offers to resume.
 
 ### Permissions
 
@@ -78,6 +91,9 @@ it. Reading the page's structure gives up after 2 seconds; the save is kept with
 - `notifications`: tells you when a page can't be saved (there is no page to show a toast on).
 - `favicon`: shows site icons from Chrome's cache, so they work offline.
 - `unlimitedStorage`: screenshots add up; without it Chrome may evict IndexedDB data.
+- `storage`: keeps import progress so an interrupted import can resume.
+- Access to all sites (optional): asked for the first time you import open tabs, because the
+  import captures tabs without a keypress on each one. Saving single pages never needs it.
 
 ## Local Supabase
 
