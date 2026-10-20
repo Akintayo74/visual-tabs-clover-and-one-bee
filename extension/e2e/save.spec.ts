@@ -116,18 +116,38 @@ test('unsupported pages fail with a clear reason and store nothing', async ({
   await expect(wall.getByTestId('empty')).toBeVisible();
 });
 
-test('very large and busy pages still save', async ({ context, sites, save, openWall }) => {
+test('very large and busy pages still save', async ({ context, sites, save, worker, openWall }) => {
   const page = await context.newPage();
   await page.goto(sites.url('/huge'));
   expect(await save(page)).toMatchObject({ ok: true });
 
+  // Some real sites (raycast.com) keep their main thread busy for seconds after load.
   await page.goto(sites.url('/busy'));
   await page.waitForTimeout(200); // let the page start blocking its main thread
   const started = Date.now();
-  const busy = await save(page);
+  // Called directly: the save fixture's own page script would wait for the busy page too.
+  const busy = await worker.evaluate(async () => {
+    const api = (globalThis as unknown as { chrome: typeof browser }).chrome;
+    const [tab] = await api.tabs.query({ active: true, lastFocusedWindow: true });
+    const hook = (
+      globalThis as unknown as {
+        __visualMemory: {
+          saveTab: (
+            tab: unknown,
+            options: { close: boolean },
+          ) => Promise<{ ok: boolean; timings?: Record<string, number> }>;
+        };
+      }
+    ).__visualMemory;
+    return hook.saveTab(tab, { close: false });
+  });
+  const elapsed = Date.now() - started;
+  console.log('busy page save', busy.timings, 'total', elapsed);
   expect(busy.ok).toBe(true);
-  // The fingerprint gives up after 2s; the save doesn't wait for the page.
-  expect(Date.now() - started).toBeLessThan(4000);
+  // The page blocks for 8s. The fingerprint gives up after 2s and the toast never holds up the
+  // save, so the snapshot is stored within about 2s and the whole save finishes well before 8s.
+  expect(busy.timings?.stored ?? Infinity).toBeLessThan(3000);
+  expect(elapsed).toBeLessThan(5000);
 
   const wall = await openWall();
   await expect(wall.locator('.card.is-ready')).toHaveCount(2, { timeout: 30_000 });

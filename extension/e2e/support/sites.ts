@@ -95,7 +95,7 @@ function huge(): string {
 function busy(): string {
   return page(
     'Busy',
-    `<h1>Busy page</h1><script>addEventListener('load',()=>setTimeout(()=>{const end=Date.now()+4000;while(Date.now()<end){}},50));</script>`,
+    `<h1>Busy page</h1><script>addEventListener('load',()=>setTimeout(()=>{const end=Date.now()+8000;while(Date.now()<end){}},50));</script>`,
   );
 }
 

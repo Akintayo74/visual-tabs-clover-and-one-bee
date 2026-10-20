@@ -15,6 +15,8 @@ import { imageSize, makeVariants } from './images';
 import { renderToast, TOAST_HOST_ID, type ToastState } from './toast';
 
 const FINGERPRINT_TIMEOUT_MS = 2000;
+// Injected scripts run on the page's main thread, which a busy page can block for seconds.
+const TOAST_TIMEOUT_MS = 1000;
 const CAPTURE_RETRY_DELAY_MS = 600;
 const CAPTURE_RETRIES = 3;
 
@@ -69,25 +71,34 @@ async function fingerprint(tabId: number): Promise<Fingerprint | null> {
   return Promise.race([injection, timeout]);
 }
 
+/** Never waits longer than TOAST_TIMEOUT_MS, so a busy page can't hold up a save. */
 async function toast(tabId: number, state: ToastState, message: string): Promise<void> {
-  try {
-    await browser.scripting.executeScript({
+  const injection = browser.scripting
+    .executeScript({
       target: { tabId },
       func: renderToast,
       args: [TOAST_HOST_ID, state, message],
+    })
+    .then(() => undefined)
+    .catch(() => {
+      // The toast is a courtesy; the badge and notifications still report the outcome.
     });
-  } catch {
-    // The toast is a courtesy; the badge and notifications still report the outcome.
-  }
+  await Promise.race([injection, delay(TOAST_TIMEOUT_MS)]);
 }
 
-async function flashBadge(text: string, color: string): Promise<void> {
+let badgeTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Shows `text` on the toolbar icon. Unlike the toast, this doesn't depend on the page. */
+async function flashBadge(text: string, color: string, { sticky = false } = {}): Promise<void> {
+  clearTimeout(badgeTimer);
   try {
     await browser.action.setBadgeBackgroundColor({ color });
     await browser.action.setBadgeText({ text });
-    setTimeout(() => {
-      void browser.action.setBadgeText({ text: '' });
-    }, 2500);
+    if (!sticky) {
+      badgeTimer = setTimeout(() => {
+        void browser.action.setBadgeText({ text: '' });
+      }, 2500);
+    }
   } catch (error) {
     console.warn('[save] could not set the badge', error);
   }
@@ -133,11 +144,13 @@ export async function saveTab(
     const dataUrl = await capture(tab.windowId);
     mark('captured');
 
-    // The toast goes up only after the capture so it never appears in the screenshot.
+    // Feedback goes up only after the capture so it never appears in the screenshot. The
+    // badge is immediate; the toast needs the page's main thread, so the save never waits on it.
+    void flashBadge('…', '#5f6368', { sticky: true });
+    void toast(tabId, 'saving', 'Saving…');
     const [fp, raw] = await Promise.all([
       fingerprint(tabId),
       fetch(dataUrl).then((response) => response.blob()),
-      toast(tabId, 'saving', 'Saving…'),
     ]);
     mark('fingerprinted');
     const size = await imageSize(raw);

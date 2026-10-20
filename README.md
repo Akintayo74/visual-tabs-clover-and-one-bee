@@ -65,6 +65,11 @@ IndexedDB before showing **Saved**. The WebP versions are made afterwards; a car
 replaces its snapshot rather than adding a duplicate. Browser pages, the Chrome Web Store, PDFs
 and local files can't be saved; you get a notification saying so.
 
+The toolbar icon shows **…** as soon as the capture is taken and **✓** once the save is stored.
+The in-page toast needs the page's own main thread, so on a page that is busy (some animated
+sites block it for seconds after loading) the toast can be late, but the save never waits for
+it. Reading the page's structure gives up after 2 seconds; the save is kept without it.
+
 ### Permissions
 
 - `activeTab`, `scripting`: pressing the shortcut or the toolbar button lets the extension
