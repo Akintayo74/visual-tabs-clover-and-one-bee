@@ -111,8 +111,25 @@ export async function startSites(): Promise<SiteServer> {
     let html: string | null = null;
     const match = /^\/site\/(\d+)$/.exec(url.pathname);
     if (match?.[1]) html = variant(Number(match[1]));
-    else if (url.pathname === '/huge') html = huge();
+    else if (url.pathname.startsWith('/bad-canonical/')) {
+      // A site that wrongly points every page's canonical at its homepage.
+      html = page(
+        `Bad canonical ${url.pathname}`,
+        `<h1>${url.pathname}</h1>`,
+        '<link rel="canonical" href="/">',
+      );
+    } else if (url.pathname === '/huge') html = huge();
     else if (url.pathname === '/busy') html = busy();
+    if (url.pathname === '/slow') {
+      // Still loading when an import reaches it, to check the import waits for load.
+      setTimeout(
+        () => {
+          res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(variant(7));
+        },
+        Number(url.searchParams.get('ms') ?? 3000),
+      );
+      return;
+    }
     if (html === null) {
       res.writeHead(404, { 'content-type': 'text/plain' }).end('not found');
       return;

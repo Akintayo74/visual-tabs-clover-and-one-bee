@@ -45,7 +45,7 @@ export type SaveStatus = 'processing' | 'ready' | 'failed';
  */
 export interface SaveRecord {
   id: string;
-  /** Normalised canonical URL. Re-saving the same key replaces the snapshot. */
+  /** Normalised page URL (see dedupeKey). Re-saving the same key replaces the snapshot. */
   dedupeKey: string;
   url: string;
   canonicalUrl: string | null;

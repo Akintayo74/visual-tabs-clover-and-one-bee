@@ -3,6 +3,7 @@ import { IDBFactory } from 'fake-indexeddb';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   completeProcessing,
+  DB_NAME,
   deleteSave,
   getDisplayImage,
   getFingerprint,
@@ -125,5 +126,54 @@ describe('deleteSave', () => {
     expect(await getImage(record.id, 'full')).toBeUndefined();
     expect(await getImage(record.id, 'card')).toBeUndefined();
     expect(await getFingerprint(record.id)).toBeUndefined();
+  });
+});
+
+describe('migration from version 1', () => {
+  async function seedVersion1(records: { id: string; dedupeKey: string; url: string }[]) {
+    const { openDB } = await import('idb');
+    const db = await openDB(DB_NAME, 1, {
+      upgrade(db) {
+        const saves = db.createObjectStore('saves', { keyPath: 'id' });
+        saves.createIndex('byDedupeKey', 'dedupeKey', { unique: true });
+        saves.createIndex('byUpdatedAt', 'updatedAt');
+        saves.createIndex('byStatus', 'status');
+        db.createObjectStore('fingerprints', { keyPath: 'saveId' });
+        const images = db.createObjectStore('images', { keyPath: ['saveId', 'variant'] });
+        images.createIndex('bySaveId', 'saveId');
+      },
+    });
+    for (const [i, r] of records.entries()) {
+      await db.put('saves', { ...r, updatedAt: i, status: 'ready' });
+    }
+    db.close();
+  }
+
+  it('re-keys canonical-keyed saves on their page URL', async () => {
+    await seedVersion1([
+      {
+        id: 'a',
+        dedupeKey: 'https://studio.design',
+        url: 'https://studio.design/work?utm_source=x',
+      },
+      { id: 'b', dedupeKey: 'https://shop.example/item', url: 'https://shop.example/item' },
+    ]);
+    const saves = await listSaves();
+    expect(Object.fromEntries(saves.map((s) => [s.id, s.dedupeKey]))).toEqual({
+      a: 'https://studio.design/work',
+      b: 'https://shop.example/item',
+    });
+  });
+
+  it('never merges saves when a new key is already taken', async () => {
+    await seedVersion1([
+      { id: 'home', dedupeKey: 'https://studio.design', url: 'https://studio.design/' },
+      // Saved from /work, but keyed on its canonical, which pointed at a different page that
+      // another save's page URL now claims.
+      { id: 'work', dedupeKey: 'https://studio.design/work', url: 'https://studio.design/' },
+    ]);
+    const saves = await listSaves();
+    expect(saves).toHaveLength(2);
+    expect(new Set(saves.map((s) => s.dedupeKey)).size).toBe(2);
   });
 });

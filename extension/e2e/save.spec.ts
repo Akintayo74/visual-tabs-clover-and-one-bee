@@ -85,6 +85,24 @@ test('re-saving the same page replaces the snapshot instead of duplicating', asy
   await expect(wall.getByTestId('card')).toHaveCount(1);
 });
 
+test('pages whose canonical wrongly points at the homepage stay separate', async ({
+  context,
+  sites,
+  save,
+  openWall,
+}) => {
+  const page = await context.newPage();
+  await page.goto(sites.url('/bad-canonical/one'));
+  const first = await save(page);
+  await page.goto(sites.url('/bad-canonical/two'));
+  const second = await save(page);
+  expect(first.ok && second.ok).toBe(true);
+  expect(second.id).not.toBe(first.id);
+
+  const wall = await openWall();
+  await expect(wall.getByTestId('card')).toHaveCount(2);
+});
+
 test('save and close closes the tab only after the save is stored', async ({
   context,
   sites,

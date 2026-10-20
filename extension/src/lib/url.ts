@@ -35,19 +35,11 @@ export function normalizeUrl(input: string): string {
 }
 
 /**
- * The key saves are deduplicated on. Uses the page's canonical URL when it points at the
- * same site; a canonical on another host is ignored so a bad tag can't merge unrelated saves.
+ * The key saves are deduplicated on: the normalised page URL. The page's canonical URL is
+ * stored but not used, because some sites point every page's canonical at their homepage,
+ * which would make one page's save overwrite another's.
  */
-export function dedupeKey(url: string, canonicalUrl: string | null): string {
-  if (canonicalUrl) {
-    try {
-      if (bareHost(new URL(canonicalUrl).hostname) === bareHost(new URL(url).hostname)) {
-        return normalizeUrl(canonicalUrl);
-      }
-    } catch {
-      // Malformed canonical: fall through to the page URL.
-    }
-  }
+export function dedupeKey(url: string): string {
   return normalizeUrl(url);
 }
 
