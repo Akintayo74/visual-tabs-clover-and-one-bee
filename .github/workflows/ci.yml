@@ -34,11 +34,28 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # Applies every migration (a broken one fails CI) and starts what the extension uses:
-      # Postgres, the API, Auth, Storage and the test mailbox.
+      # Postgres, the API, Auth, Storage, Edge Functions and the test mailbox.
       - run: >-
           pnpm exec supabase start
-          -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,realtime,postgres-meta
+          -x studio,imgproxy,logflare,vector,supavisor,realtime,postgres-meta
       - run: pnpm --filter extension test:server
+      # The Edge Functions, pointed at the mock models (no real keys in CI).
+      - run: |
+          pnpm exec supabase functions serve --env-file server/functions.test.env > functions.log 2>&1 &
+          for i in $(seq 1 60); do
+            status=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:54321/functions/v1/process-save || true)
+            if [ "$status" = "401" ]; then exit 0; fi
+            sleep 2
+          done
+          cat functions.log
+          exit 1
+      - run: pnpm --filter server test:functions
+      - run: pnpm --filter eval test:local
       - run: pnpm --filter extension exec playwright install --with-deps chromium
-      # Backup and sync against the local stack: sign-in, upload, offline, a second browser.
-      - run: pnpm --filter extension e2e:sync
+      # Backup, sync, describing and search against the local stack: sign-in, upload,
+      # offline, a second browser.
+      - run: |
+          pnpm --filter server mock-models > mock-models.log 2>&1 &
+          pnpm --filter extension e2e:sync
+      - if: failure()
+        run: cat functions.log mock-models.log || true
