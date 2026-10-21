@@ -9,6 +9,7 @@ import {
   startImport,
 } from '@/src/background/import';
 import { processSave, resumeProcessing, saveTab } from '@/src/background/save';
+import { logSearchClick, searchRemote } from '@/src/background/search';
 import { setSimulatedOffline } from '@/src/background/supabase';
 import {
   downloadMissingFullImages,
@@ -21,6 +22,8 @@ import {
   signOut,
   verifyCode,
 } from '@/src/background/sync';
+import { PROCESS_ALARM, requestProcessing, retryUnderstanding } from '@/src/background/understand';
+import { getSave } from '@/src/lib/db';
 import type { WorkerMessage } from '@/src/lib/events';
 
 const SAVE_AND_CLOSE_MENU = 'save-and-close';
@@ -92,6 +95,16 @@ export default defineBackground(() => {
       case 'download-missing-images':
         await downloadMissingFullImages();
         return null;
+      case 'search':
+        return searchRemote(msg.query);
+      case 'search-click':
+        await logSearchClick(msg.query, msg.id, msg.rank);
+        return null;
+      case 'retry-understanding': {
+        const save = await getSave(msg.id);
+        if (save) await retryUnderstanding(save);
+        return null;
+      }
     }
   }
 
@@ -112,6 +125,7 @@ export default defineBackground(() => {
 
   browser.alarms.onAlarm.addListener((alarm) => {
     if (isSyncAlarm(alarm.name)) void requestSync();
+    if (alarm.name === PROCESS_ALARM) void requestProcessing();
   });
   void browser.alarms.create(PULL_ALARM, { periodInMinutes: PULL_PERIOD_MINUTES });
 
@@ -123,7 +137,13 @@ export default defineBackground(() => {
 
   if (import.meta.env.MODE === 'e2e') {
     Object.assign(globalThis, {
-      __visualMemory: { saveTab, requestSync, setSimulatedOffline, getSyncStatus },
+      __visualMemory: {
+        saveTab,
+        requestSync,
+        requestProcessing,
+        setSimulatedOffline,
+        getSyncStatus,
+      },
     });
   }
 });

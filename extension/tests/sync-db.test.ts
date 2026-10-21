@@ -7,6 +7,7 @@ import {
   deleteSave,
   getImage,
   getSave,
+  hasUnprocessedSaves,
   listDeletions,
   listMissingFullImages,
   listSaves,
@@ -20,6 +21,7 @@ import {
   resetForNewAccount,
   storeFullImage,
   storeRemoteSave,
+  storeUnderstanding,
   upsertSnapshot,
   type NewSnapshot,
 } from '@/src/lib/db';
@@ -67,6 +69,11 @@ function row(overrides: Partial<RemoteSave> = {}): RemoteSave {
     palette: ['#fff'],
     fonts: ['Inter'],
     note: null,
+    status: 'ready',
+    error: null,
+    description: 'A studio site.',
+    recall_phrases: ['studio with big type'],
+    tags: ['studio'],
     ...overrides,
   };
 }
@@ -199,5 +206,36 @@ describe('resetForNewAccount', () => {
     await resetForNewAccount();
     expect((await listSaves()).map((s) => s.id)).toEqual([local.id]);
     expect(await listDeletions(Date.now())).toEqual([]);
+  });
+});
+
+describe('understanding from the server', () => {
+  it('stores what the server made of a save, and keeps it through a re-save', async () => {
+    await storeRemoteSave(row({ status: 'pending', description: null }), {
+      card: new Blob(['c']),
+      full: null,
+    });
+    expect((await getSave('remote-1'))?.understanding).toMatchObject({ status: 'pending' });
+    expect(await hasUnprocessedSaves()).toBe(true);
+
+    await storeUnderstanding('remote-1', {
+      status: 'ready',
+      error: null,
+      description: 'Big type.',
+      recallPhrases: ['big type site'],
+      tags: ['type'],
+    });
+    expect(await hasUnprocessedSaves()).toBe(false);
+
+    await upsertSnapshot(snapshot({ now: 9_000_000_000_000 }));
+    const resaved = await getSave('remote-1');
+    expect(resaved?.syncState).toBe('pending');
+    // Still findable by its old description until the new snapshot is described.
+    expect(resaved?.understanding?.description).toBe('Big type.');
+  });
+
+  it('ignores saves that are not uploaded yet', async () => {
+    await readySave();
+    expect(await hasUnprocessedSaves()).toBe(false);
   });
 });

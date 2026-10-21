@@ -1,4 +1,4 @@
-import type { Fingerprint } from './types';
+import type { Fingerprint, Understanding } from './types';
 
 /** A row of public.saves as the client reads it (see supabase/migrations). */
 export interface RemoteSave {
@@ -21,13 +21,38 @@ export interface RemoteSave {
   palette: string[];
   fonts: string[];
   note: string | null;
+  status: Understanding['status'];
+  error: string | null;
+  description: string | null;
+  recall_phrases: string[] | null;
+  tags: string[] | null;
 }
 
-/** Every column the client needs; leaves out the embedding and the model's output. */
+/** Every column the client needs; leaves out the embedding and the processing queue. */
 export const REMOTE_COLUMNS =
   'id,dedupe_key,url,canonical_url,title,site_name,favicon_url,created_at,captured_at,' +
   'updated_at,deleted_at,image_full_path,image_card_path,width,height,fingerprint,palette,' +
-  'fonts,note';
+  'fonts,note,status,error,description,recall_phrases,tags';
+
+export function understandingOf(row: RemoteSave): Understanding {
+  return {
+    status: row.status,
+    error: row.error,
+    description: row.description,
+    recallPhrases: row.recall_phrases ?? [],
+    tags: row.tags ?? [],
+  };
+}
+
+export function sameUnderstanding(a: Understanding | undefined, b: Understanding): boolean {
+  return (
+    a?.status === b.status &&
+    a.error === b.error &&
+    a.description === b.description &&
+    a.recallPhrases.join('\n') === b.recallPhrases.join('\n') &&
+    a.tags.join('\n') === b.tags.join('\n')
+  );
+}
 
 /** What public.upsert_save returns. */
 export interface UpsertResult {

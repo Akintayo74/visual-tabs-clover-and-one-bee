@@ -18,6 +18,7 @@ import {
   resetForNewAccount,
   storeFullImage,
   storeRemoteSave,
+  storeUnderstanding,
   type RemoteImages,
 } from '@/src/lib/db';
 import { publish } from '@/src/lib/events';
@@ -25,12 +26,15 @@ import {
   imagePath,
   REMOTE_COLUMNS,
   SCREENSHOT_BUCKET,
+  sameUnderstanding,
+  understandingOf,
   type RemoteSave,
   type UpsertResult,
 } from '@/src/lib/remote';
 import { backoffMs, publishSync, type SyncStatus } from '@/src/lib/sync-state';
 import type { SaveRecord } from '@/src/lib/types';
 import { isNetworkError, supabase, syncConfigured } from './supabase';
+import { requestProcessing } from './understand';
 
 const CURSOR_KEY = 'syncCursor';
 const ACCOUNT_KEY = 'syncAccount';
@@ -162,6 +166,8 @@ async function runSync(): Promise<void> {
     await downloadMissingFullImages();
     await setStatus({ phase: 'idle', error: null, lastSyncedAt: Date.now() });
     await scheduleRetry(await nextRetryAt());
+    // Asks the server to describe anything new; runs apart so it never holds up uploads.
+    void requestProcessing();
   } catch (error) {
     if (error instanceof OfflineError || isNetworkError(error)) {
       await setStatus({ phase: 'offline', error: null });
@@ -290,6 +296,7 @@ async function upload(userId: string, save: SaveRecord): Promise<void> {
   const { row } = result;
   if (result.applied && row.id === save.id) {
     await markSynced(save.id, save.updatedAt, remoteRef(row));
+    await storeUnderstanding(save.id, understandingOf(row));
     return;
   }
   // The server kept another device's save of this page (same page, different id) or a
@@ -361,7 +368,14 @@ async function applyPulled(row: RemoteSave): Promise<void> {
   const local = await getSave(row.id);
   const sameKey = row.deleted_at ? undefined : await getSaveByDedupeKey(row.dedupe_key);
   const action = pullAction(row, local, sameKey);
-  if (action === 'skip') return;
+  if (action === 'skip') {
+    // The snapshot is the same, but the server may have described it since.
+    if (local && !row.deleted_at && !sameUnderstanding(local.understanding, understandingOf(row))) {
+      await storeUnderstanding(row.id, understandingOf(row));
+      publish({ type: 'changed', id: row.id });
+    }
+    return;
+  }
   if (action === 'delete-local') {
     await deleteSave(row.id, { tombstone: false });
     publish({ type: 'deleted', id: row.id });

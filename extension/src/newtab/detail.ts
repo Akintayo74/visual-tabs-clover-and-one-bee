@@ -57,6 +57,7 @@ function signals(fp: Fingerprint): string {
 
 export interface DetailCallbacks {
   onRetry(save: SaveRecord): void;
+  onRetryUnderstanding(save: SaveRecord): void;
   onDeleted(save: SaveRecord): void;
 }
 
@@ -143,6 +144,17 @@ export class Detail {
         this.callbacks.onRetry(save);
       });
       actions.prepend(retry);
+    } else if (save.understanding?.status === 'failed') {
+      const retry = el('button', {
+        type: 'button',
+        className: 'button',
+        textContent: 'Retry describing',
+      });
+      retry.addEventListener('click', () => {
+        retry.disabled = true;
+        this.callbacks.onRetryUnderstanding(save);
+      });
+      actions.prepend(retry);
     }
 
     const icon = el('img', { className: 'detail-favicon', src: faviconUrl(save.url, 32), alt: '' });
@@ -168,6 +180,32 @@ export class Detail {
           save.status === 'failed' ? `Failed: ${save.error ?? 'unknown error'}` : 'Processing…',
         ),
       );
+    }
+    const understanding = save.understanding;
+    if (understanding?.description) {
+      facts.append(row('Description', understanding.description));
+    }
+    if (understanding?.recallPhrases.length) {
+      facts.append(
+        row(
+          'Remembered as',
+          el(
+            'ul',
+            { className: 'recall-phrases' },
+            understanding.recallPhrases.map((p) => el('li', { textContent: p })),
+          ),
+        ),
+      );
+    }
+    if (understanding?.tags.length) facts.append(row('Tags', understanding.tags.join(', ')));
+    if (understanding && understanding.status !== 'ready') {
+      const text =
+        understanding.status === 'failed'
+          ? `Couldn't describe this save: ${understanding.error ?? 'unknown error'}`
+          : understanding.error
+            ? `Describing; the last try failed (${understanding.error}) and will be retried`
+            : 'Describing…';
+      facts.append(row('Search', text));
     }
     if (save.fonts.length) facts.append(row('Fonts', save.fonts.join(', ')));
     if (save.palette.length) {

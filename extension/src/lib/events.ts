@@ -1,4 +1,5 @@
 import type { ImportMessage } from './import-state';
+import type { SearchMessage } from './search';
 import type { SyncMessage } from './sync-state';
 
 /** Tells open new tabs that saves changed. Works between the service worker and extension pages. */
@@ -23,7 +24,8 @@ export function subscribe(listener: (event: SavesEvent) => void): () => void {
 }
 
 /** Messages from extension pages to the service worker. */
-export type WorkerMessage = { type: 'retry'; id: string } | ImportMessage | SyncMessage;
+export type WorkerMessage =
+  { type: 'retry'; id: string } | ImportMessage | SyncMessage | SearchMessage;
 
 type Response<T> = { ok: true; result: T } | { ok: false; error: string };
 

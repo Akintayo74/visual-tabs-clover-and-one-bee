@@ -26,6 +26,19 @@
           ></button>
         </div>
       </header>
+      <div class="search">
+        <input
+          type="search"
+          class="search-input"
+          data-testid="search"
+          placeholder="Describe what you remember… (press / to search)"
+          aria-label="Search your saves"
+          autocomplete="off"
+          spellcheck="false"
+          autofocus
+        />
+        <span class="search-status" data-testid="search-status" aria-live="polite"></span>
+      </div>
       <section class="account" data-testid="account" hidden></section>
       <section class="import" data-testid="import" aria-live="polite" hidden></section>
       <p class="empty" data-testid="empty" hidden></p>
