@@ -29,6 +29,12 @@ pnpm install
 
 The Supabase CLI is a dev dependency, so `pnpm exec supabase …` always uses the pinned version.
 
+To build with backup and sync, copy [extension/.env.example](extension/.env.example) to
+`extension/.env` and fill in the Supabase URL and publishable key (see
+[Hosted Supabase project](#hosted-supabase-project), or use the local stack's values from
+`pnpm exec supabase status`). Both values are public. Without them the extension still works,
+with saves kept on this computer only.
+
 ## Extension
 
 ```sh
@@ -57,6 +63,8 @@ After a rebuild, click the reload icon on the extension's card in `chrome://exte
 | Close the detail view     | `Esc`                                                                     |
 | Import every open tab     | **Import open tabs** on the new tab                                       |
 | Cancel an import          | **Cancel** on the new tab, or click the toolbar button                    |
+| Back up and sync          | **Sign in to back up** on the new tab                                     |
+| Export everything         | **Export** on the new tab                                                 |
 
 Change the shortcuts at `chrome://extensions/shortcuts`. Chrome only assigns a suggested
 shortcut if nothing else uses it, so check that page if a shortcut does nothing.
@@ -83,6 +91,30 @@ saved and why anything was skipped, with a button to close the saved tabs. A tab
 if it still shows the page that was saved. If Chrome stops the extension mid-import, the new tab
 offers to resume.
 
+### Backup and sync
+
+Saves are always written to this computer first, so saving works offline and never waits for
+the network. Once you sign in (with a 6-digit code emailed to you), each save uploads in the
+background: its record goes to the `saves` table and its two WebP images to the private
+`screenshots` bucket. Failed uploads retry with backoff (5s, 10s, 20s… up to 15 minutes), and
+while offline the extension checks back every 30 seconds, so saves made offline upload by
+themselves. The top of the new tab says whether everything is backed up, and a card shows
+**Waiting to back up** or **Backup failed, retrying** until its upload succeeds.
+
+Signing in on another computer, or after reinstalling, downloads every save: cards first, then
+the full images. Changes from other computers arrive every 5 minutes, when the new tab opens,
+or with **Sync now**. Rules when two computers disagree:
+
+- The same page saved on two computers is one save; the newer snapshot wins.
+- A delete removes the save everywhere, unless the page was saved again after the delete.
+- Signing out keeps your saves here and on the server. Signing in as someone else removes the
+  previous account's saves from this computer (they stay on the server); saves never uploaded
+  stay and upload to the new account.
+
+**Export** downloads a zip of everything on this computer: `saves.json` (every save's details
+and page fingerprint) and an `images/` folder. It first downloads any full images that were
+synced from another computer but aren't here yet.
+
 ### Permissions
 
 - `activeTab`, `scripting`: pressing the shortcut or the toolbar button lets the extension
@@ -91,7 +123,9 @@ offers to resume.
 - `notifications`: tells you when a page can't be saved (there is no page to show a toast on).
 - `favicon`: shows site icons from Chrome's cache, so they work offline.
 - `unlimitedStorage`: screenshots add up; without it Chrome may evict IndexedDB data.
-- `storage`: keeps import progress so an interrupted import can resume.
+- `storage`: keeps import progress so an interrupted import can resume, and the sign-in session.
+- `alarms`: retries uploads and checks for changes from other computers, even after Chrome
+  stops the extension's background worker.
 - Access to all sites (optional): asked for the first time you import open tabs, because the
   import captures tabs without a keypress on each one. Saving single pages never needs it.
 
@@ -103,7 +137,8 @@ pnpm db:reset   # re-create the local database and apply every migration
 pnpm db:stop
 ```
 
-`supabase start` prints the local URLs and keys. Studio is at http://127.0.0.1:54323.
+`supabase start` prints the local URLs and keys. Studio is at http://127.0.0.1:54323. Sign-in
+emails don't leave your machine; read them at http://127.0.0.1:54324 (Mailpit).
 
 ### Migrations
 
@@ -114,6 +149,22 @@ pnpm exec supabase migration new <name>   # creates supabase/migrations/<timesta
 pnpm db:reset                             # applies it locally
 pnpm exec supabase db push                # applies pending migrations to the linked project
 ```
+
+### Hosted Supabase project
+
+1. Create a project at [supabase.com](https://supabase.com/dashboard), then link it:
+   `pnpm exec supabase link --project-ref <ref>`.
+2. Apply the schema: `pnpm exec supabase db push`. This creates the `saves` and `search_events`
+   tables with row-level security, the `upsert_save`/`delete_save` functions and the private
+   `screenshots` bucket.
+3. Open the project's [email templates](https://supabase.com/dashboard/project/_/auth/templates)
+   and replace the **Magic Link** template's body with
+   [supabase/templates/magic_link.html](supabase/templates/magic_link.html), so the email
+   carries a code (the extension can't receive a magic link). Email sign-in is on by default
+   (**Authentication > Sign In / Providers**). Supabase's built-in email sender is
+   rate-limited, so set up custom SMTP in the Auth settings before real use.
+4. Copy the project URL and the **publishable** key (Project Settings > API Keys) into
+   `extension/.env`, then `pnpm build`. Never use the secret key in the extension.
 
 ### Edge Functions
 
@@ -138,6 +189,12 @@ All data lives in the extension's IndexedDB database `visual-memory` (see
 - `fingerprints`: the page structure read at save time, loaded only in the detail view.
 - `images`: `raw` (the capture as taken, kept until processing succeeds), `full` (up to 2400px
   wide, WebP) and `card` (960px, WebP).
+- `deletions`: deletes made here that the server hasn't recorded yet.
+
+Each save also records whether its current snapshot is uploaded (`syncState`) and what the
+server holds for it. Supabase is the source of truth once you sign in (see
+`supabase/migrations/`): deleted saves stay as tombstones so every computer learns about the
+delete, and clients pull rows changed since their last sync by `updated_at`.
 
 ## Checks
 
@@ -148,6 +205,10 @@ pnpm typecheck       # tsc --noEmit, strict
 pnpm test            # Vitest unit tests
 pnpm check           # all of the above
 pnpm --filter extension e2e   # browser tests: saves, the wall, fingerprints (Chromium)
+
+# These need the local stack running (pnpm db:start):
+pnpm --filter extension test:server   # database tests: upsert/delete rules, row-level security
+pnpm --filter extension e2e:sync      # backup and sync: sign-in, offline, reinstall, 2 browsers
 ```
 
 The e2e tests use Playwright's Chromium (`pnpm --filter extension exec playwright install chromium`).
@@ -157,8 +218,11 @@ because a test can't press a keyboard shortcut to grant `activeTab`. Don't load 
 real use. The test sites are generated locally (`extension/e2e/support/sites.ts`), so the suite
 runs offline.
 
-CI runs all of these on every pull request, plus `supabase db start` to make sure every migration
-applies.
+The sync tests read sign-in codes from the local mailbox. They simulate going offline inside the
+extension, because Playwright's offline mode doesn't reach an extension's background worker.
+
+CI runs all of these on every pull request; the database and sync tests run in a job that
+starts the local Supabase stack, which also checks that every migration applies.
 
 ## Why WXT
 

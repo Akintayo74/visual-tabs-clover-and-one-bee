@@ -140,7 +140,7 @@ Each phase ends with something usable and a short checklist that must pass befor
 
 ### Phase 3 — Durable storage and sync
 - Supabase schema, RLS, Storage buckets.
-- Auth (email magic link or one-time code is enough for now).
+- Auth (email magic link or one-time code is enough for now). Uses a 6-digit emailed code, because an extension can't receive a magic link's redirect.
 - Background upload queue with retries and backoff; offline support; status per save.
 - Sync down to the local cache on a new device / fresh install.
 - One-click export (JSON + images, zipped).
