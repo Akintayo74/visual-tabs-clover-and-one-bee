@@ -33,6 +33,20 @@ export function retryableStatus(status: number | undefined): boolean {
   );
 }
 
+/**
+ * A problem with the API account rather than the input: a bad or revoked key (401, 403), or
+ * no credit left (402, or Anthropic's 400 "credit balance is too low"). Someone can fix it,
+ * so the save should keep waiting instead of failing for good.
+ */
+export function accountProblem(status: number | undefined, detail: string): boolean {
+  if (status === 401 || status === 402 || status === 403) return true;
+  return status === 400 && /credit balance|billing|payment method/i.test(detail);
+}
+
+function retryable(status: number | undefined, detail: string): boolean {
+  return retryableStatus(status) || accountProblem(status, detail);
+}
+
 function statusOf(error: unknown): number | undefined {
   if (typeof error === 'object' && error !== null && 'status' in error) {
     const status = (error as { status: unknown }).status;
@@ -87,8 +101,8 @@ export async function describe(
       ],
     });
   } catch (error) {
-    const status = statusOf(error);
-    throw new ModelError(`Claude: ${messageOf(error)}`, retryableStatus(status));
+    const message = messageOf(error);
+    throw new ModelError(`Claude: ${message}`, retryable(statusOf(error), message));
   }
 
   if (response.stop_reason === 'refusal') {
@@ -132,7 +146,7 @@ async function voyage<T>(options: VoyageOptions, path: string, body: unknown): P
     const detail = (await response.text().catch(() => '')).slice(0, 300);
     throw new ModelError(
       `Voyage ${path} returned ${String(response.status)}: ${detail}`,
-      retryableStatus(response.status),
+      retryable(response.status, detail),
     );
   }
   return (await response.json()) as T;

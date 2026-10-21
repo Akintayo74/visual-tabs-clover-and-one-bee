@@ -1,5 +1,6 @@
 import { describe as group, expect, it } from 'vitest';
 import {
+  accountProblem,
   describe,
   embedQuery,
   embedSave,
@@ -239,6 +240,15 @@ group('helpers', () => {
   it('classifies retryable statuses', () => {
     expect([408, 409, 429, 500, 529, undefined].every(retryableStatus)).toBe(true);
     expect([400, 401, 403, 404, 413].some(retryableStatus)).toBe(false);
+  });
+
+  it('treats account problems as fixable, not as a bad save', () => {
+    expect(accountProblem(400, 'Your credit balance is too low to access the Anthropic API.')).toBe(
+      true,
+    );
+    expect([401, 402, 403].every((s) => accountProblem(s, ''))).toBe(true);
+    expect(accountProblem(400, 'messages: image too large')).toBe(false);
+    expect(accountProblem(404, 'not found')).toBe(false);
   });
 
   it('backs off from a minute to six hours', () => {
