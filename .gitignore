@@ -7,6 +7,8 @@ coverage/
 .env
 .env.*
 !.env.example
+# Local Supabase defaults for the e2e build (not secrets).
+!extension/.env.e2e
 .DS_Store
 # Supabase local state
 supabase/.branches

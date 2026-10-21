@@ -63,6 +63,28 @@ export interface SaveRecord {
   palette: string[];
   fonts: string[];
   note: string | null;
+  /** 'pending' until the current snapshot is uploaded; indexed so the upload queue is cheap to list. */
+  syncState: SyncState;
+  sync: SyncInfo;
+}
+
+export type SyncState = 'pending' | 'synced';
+
+export interface SyncInfo {
+  /** Failed upload attempts for the current snapshot. */
+  attempts: number;
+  /** Don't retry before this time (ms). */
+  nextAttemptAt: number;
+  error: string | null;
+  /** What the server holds for this save, once any snapshot of it has been uploaded. */
+  remote: RemoteRef | null;
+}
+
+export interface RemoteRef {
+  /** captured_at of the snapshot stored on the server (ms). */
+  capturedAt: number;
+  fullPath: string | null;
+  cardPath: string | null;
 }
 
 /**

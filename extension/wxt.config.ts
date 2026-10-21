@@ -14,8 +14,11 @@ export default defineConfig({
       'notifications',
       'favicon',
       'unlimitedStorage',
-      // Import progress, so an import cut off by a service worker restart can resume.
+      // Import progress, so an import cut off by a service worker restart can resume; and the
+      // sign-in session and sync cursor.
       'storage',
+      // Retries uploads and checks for changes from other devices, even after the worker stops.
+      'alarms',
     ],
     // Importing open tabs captures tabs without a keypress on each one, which activeTab
     // can't cover. The new tab asks for this when you start an import, not at install.

@@ -9,6 +9,18 @@ import {
   startImport,
 } from '@/src/background/import';
 import { processSave, resumeProcessing, saveTab } from '@/src/background/save';
+import { setSimulatedOffline } from '@/src/background/supabase';
+import {
+  downloadMissingFullImages,
+  getSyncStatus,
+  isSyncAlarm,
+  PULL_ALARM,
+  PULL_PERIOD_MINUTES,
+  requestSync,
+  sendCode,
+  signOut,
+  verifyCode,
+} from '@/src/background/sync';
 import type { WorkerMessage } from '@/src/lib/events';
 
 const SAVE_AND_CLOSE_MENU = 'save-and-close';
@@ -65,6 +77,21 @@ export default defineBackground(() => {
       case 'import-dismiss':
         await dismissImport();
         return null;
+      case 'sync-status':
+        return getSyncStatus();
+      case 'sync-now':
+        void requestSync();
+        return getSyncStatus();
+      case 'auth-send-code':
+        await sendCode(msg.email);
+        return null;
+      case 'auth-verify':
+        return verifyCode(msg.email, msg.code);
+      case 'auth-sign-out':
+        return signOut();
+      case 'download-missing-images':
+        await downloadMissingFullImages();
+        return null;
     }
   }
 
@@ -83,11 +110,20 @@ export default defineBackground(() => {
     return true; // Keeps the channel open for the async response.
   });
 
+  browser.alarms.onAlarm.addListener((alarm) => {
+    if (isSyncAlarm(alarm.name)) void requestSync();
+  });
+  void browser.alarms.create(PULL_ALARM, { periodInMinutes: PULL_PERIOD_MINUTES });
+
   void resumeProcessing();
+  // Uploads anything saved while offline or while the worker was stopped, and pulls changes.
+  void requestSync();
   // Marks an import cut off by a service worker restart as interrupted, so the new tab offers to resume.
   void getImportState();
 
   if (import.meta.env.MODE === 'e2e') {
-    Object.assign(globalThis, { __visualMemory: { saveTab } });
+    Object.assign(globalThis, {
+      __visualMemory: { saveTab, requestSync, setSimulatedOffline, getSyncStatus },
+    });
   }
 });
