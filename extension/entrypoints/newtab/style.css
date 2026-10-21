@@ -58,11 +58,24 @@ body {
   font-size: 13px;
 }
 
-.import-trigger {
+.sync-status {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.sync-status[data-phase='error'],
+.sync-status[data-phase='offline'] {
+  color: var(--danger);
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 8px;
   margin-left: auto;
 }
 
-.import {
+.import,
+.account {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -97,6 +110,37 @@ body {
   gap: 8px;
 }
 
+.account-form label {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.account-row {
+  display: flex;
+  gap: 8px;
+}
+
+.account-row input {
+  font: inherit;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  min-width: 240px;
+}
+
+.account p {
+  margin: 0 0 10px;
+}
+
+.account-note {
+  color: var(--muted);
+  margin-top: 10px !important;
+  margin-bottom: 0 !important;
+}
+
+.account-message,
 .import-message {
   margin: 0 0 10px;
   color: var(--danger);
@@ -163,6 +207,17 @@ body {
   padding: 4px 8px;
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+}
+
+.card-sync {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.6);
   color: #fff;
 }
 

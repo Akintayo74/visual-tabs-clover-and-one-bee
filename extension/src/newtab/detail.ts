@@ -57,6 +57,7 @@ function signals(fp: Fingerprint): string {
 
 export interface DetailCallbacks {
   onRetry(save: SaveRecord): void;
+  onDeleted(save: SaveRecord): void;
 }
 
 /** The detail view: full screenshot, what we know about the page, and its actions. */
@@ -126,6 +127,7 @@ export class Detail {
       clearTimeout(confirmTimer);
       void deleteSave(save.id).then(() => {
         publish({ type: 'deleted', id: save.id });
+        this.callbacks.onDeleted(save);
         this.dialog.close();
       });
     });
