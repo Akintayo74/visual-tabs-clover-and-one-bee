@@ -5,6 +5,7 @@ import {
   completeProcessing,
   DB_NAME,
   deleteSave,
+  listDeletions,
   getDisplayImage,
   getFingerprint,
   getImage,
@@ -118,6 +119,14 @@ describe('completeProcessing', () => {
 });
 
 describe('deleteSave', () => {
+  it('queues the delete for upload unless told not to', async () => {
+    const a = await upsertSnapshot(snapshot());
+    const b = await upsertSnapshot(snapshot({ dedupeKey: 'https://b.example' }));
+    await deleteSave(a.id);
+    await deleteSave(b.id, { tombstone: false });
+    expect((await listDeletions(Date.now())).map((d) => d.id)).toEqual([a.id]);
+  });
+
   it('removes the save, its images and its fingerprint', async () => {
     const record = await upsertSnapshot(snapshot());
     await completeProcessing(record.id, record.updatedAt, processed);
@@ -175,5 +184,12 @@ describe('migration from version 1', () => {
     const saves = await listSaves();
     expect(saves).toHaveLength(2);
     expect(new Set(saves.map((s) => s.dedupeKey)).size).toBe(2);
+  });
+
+  it('marks every save as waiting to upload', async () => {
+    await seedVersion1([{ id: 'a', dedupeKey: 'https://a.example', url: 'https://a.example/' }]);
+    expect(await listSaves()).toMatchObject([
+      { id: 'a', syncState: 'pending', sync: { attempts: 0, remote: null } },
+    ]);
   });
 });

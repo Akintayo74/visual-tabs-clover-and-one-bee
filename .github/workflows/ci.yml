@@ -33,5 +33,12 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Starts Postgres only and applies every migration, so a broken migration fails CI.
-      - run: pnpm exec supabase db start
+      # Applies every migration (a broken one fails CI) and starts what the extension uses:
+      # Postgres, the API, Auth, Storage and the test mailbox.
+      - run: >-
+          pnpm exec supabase start
+          -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,realtime,postgres-meta
+      - run: pnpm --filter extension test:server
+      - run: pnpm --filter extension exec playwright install --with-deps chromium
+      # Backup and sync against the local stack: sign-in, upload, offline, a second browser.
+      - run: pnpm --filter extension e2e:sync

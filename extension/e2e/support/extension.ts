@@ -24,28 +24,97 @@ interface Fixtures {
   extensionId: string;
   sites: SiteServer;
   /** Saves the active tab the way the shortcut does and reports when the toast appeared. */
-  save: (
-    page: Page,
-    options?: { close?: boolean },
-  ) => Promise<SaveResult & { toastMs: number | null; savedToastMs: number | null }>;
+  save: (page: Page, options?: { close?: boolean }) => Promise<SaveOutcome>;
   openWall: () => Promise<Page>;
+}
+
+/** A browser with a fresh profile and the extension installed, like a new computer. */
+export async function launchBrowser(): Promise<BrowserContext> {
+  return chromium.launchPersistentContext('', {
+    channel: 'chromium',
+    ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
+    viewport: { width: 1440, height: 900 },
+    deviceScaleFactor: 2,
+    args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
+  });
+}
+
+export async function serviceWorker(context: BrowserContext): Promise<Worker> {
+  return context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
+}
+
+/** Opens the extension's new tab page in `context`. */
+export async function openNewTab(context: BrowserContext): Promise<Page> {
+  const extensionId = new URL((await serviceWorker(context)).url()).host;
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${extensionId}/newtab.html`);
+  // The browser opens with a blank tab; close it so imports see only the tabs a test opens.
+  for (const other of context.pages()) {
+    if (other !== page && other.url() === 'about:blank') await other.close();
+  }
+  return page;
+}
+
+type SaveOutcome = SaveResult & { toastMs: number | null; savedToastMs: number | null };
+
+/** Saves the active tab the way the shortcut does and reports when the toast appeared. */
+export async function saveActiveTab(
+  worker: Worker,
+  page: Page,
+  options: { close?: boolean } = {},
+): Promise<SaveOutcome> {
+  await page.bringToFront();
+  await page
+    .evaluate(() => {
+      const w = window as unknown as { __toast: { appear?: number; saved?: number } };
+      w.__toast = {};
+      new MutationObserver(() => {
+        const host = document.getElementById('visual-memory-toast');
+        if (host && !w.__toast.appear) w.__toast.appear = Date.now();
+        if (host?.dataset.state === 'saved' && !w.__toast.saved) w.__toast.saved = Date.now();
+      }).observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+      });
+    })
+    .catch(() => undefined);
+  const start = Date.now();
+  const result = await worker.evaluate(async (close) => {
+    const api = (globalThis as unknown as { chrome: typeof browser }).chrome;
+    const [tab] = await api.tabs.query({ active: true, lastFocusedWindow: true });
+    const hook = (
+      globalThis as unknown as {
+        __visualMemory: {
+          saveTab: (tab: unknown, options: { close: boolean }) => Promise<SaveResult>;
+        };
+      }
+    ).__visualMemory;
+    return hook.saveTab(tab, { close });
+  }, options.close ?? false);
+  let toastMs: number | null = null;
+  let savedToastMs: number | null = null;
+  if (!options.close && !page.isClosed()) {
+    const times = await page
+      .evaluate(
+        () => (window as unknown as { __toast?: { appear?: number; saved?: number } }).__toast,
+      )
+      .catch(() => undefined);
+    toastMs = times?.appear ? times.appear - start : null;
+    savedToastMs = times?.saved ? times.saved - start : null;
+  }
+  return { ...result, toastMs, savedToastMs };
 }
 
 export const test = base.extend<Fixtures>({
   // eslint-disable-next-line no-empty-pattern
   context: async ({}, use) => {
-    const context = await chromium.launchPersistentContext('', {
-      channel: 'chromium',
-      ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
-      viewport: { width: 1440, height: 900 },
-      deviceScaleFactor: 2,
-      args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
-    });
+    const context = await launchBrowser();
     await use(context);
     await context.close();
   },
   worker: async ({ context }, use) => {
-    await use(context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker')));
+    await use(await serviceWorker(context));
   },
   extensionId: async ({ worker }, use) => {
     await use(new URL(worker.url()).host);
@@ -57,60 +126,10 @@ export const test = base.extend<Fixtures>({
     await sites.close();
   },
   save: async ({ worker }, use) => {
-    await use(async (page, options = {}) => {
-      await page.bringToFront();
-      await page
-        .evaluate(() => {
-          const w = window as unknown as { __toast: { appear?: number; saved?: number } };
-          w.__toast = {};
-          new MutationObserver(() => {
-            const host = document.getElementById('visual-memory-toast');
-            if (host && !w.__toast.appear) w.__toast.appear = Date.now();
-            if (host?.dataset.state === 'saved' && !w.__toast.saved) w.__toast.saved = Date.now();
-          }).observe(document.documentElement, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-          });
-        })
-        .catch(() => undefined);
-      const start = Date.now();
-      const result = await worker.evaluate(async (close) => {
-        const api = (globalThis as unknown as { chrome: typeof browser }).chrome;
-        const [tab] = await api.tabs.query({ active: true, lastFocusedWindow: true });
-        const hook = (
-          globalThis as unknown as {
-            __visualMemory: {
-              saveTab: (tab: unknown, options: { close: boolean }) => Promise<SaveResult>;
-            };
-          }
-        ).__visualMemory;
-        return hook.saveTab(tab, { close });
-      }, options.close ?? false);
-      let toastMs: number | null = null;
-      let savedToastMs: number | null = null;
-      if (!options.close && !page.isClosed()) {
-        const times = await page
-          .evaluate(
-            () => (window as unknown as { __toast?: { appear?: number; saved?: number } }).__toast,
-          )
-          .catch(() => undefined);
-        toastMs = times?.appear ? times.appear - start : null;
-        savedToastMs = times?.saved ? times.saved - start : null;
-      }
-      return { ...result, toastMs, savedToastMs };
-    });
+    await use((page, options = {}) => saveActiveTab(worker, page, options));
   },
-  openWall: async ({ context, extensionId }, use) => {
-    await use(async () => {
-      const page = await context.newPage();
-      await page.goto(`chrome-extension://${extensionId}/newtab.html`);
-      // The browser opens with a blank tab; close it so imports see only the tabs a test opens.
-      for (const other of context.pages()) {
-        if (other !== page && other.url() === 'about:blank') await other.close();
-      }
-      return page;
-    });
+  openWall: async ({ context }, use) => {
+    await use(() => openNewTab(context));
   },
 });
 
