@@ -197,7 +197,8 @@ password_requirements = ""
 
 [auth.rate_limit]
 # Number of emails that can be sent per hour. Requires auth.email.smtp to be enabled.
-email_sent = 2
+# Raised from 2 for local testing, where the e2e tests sign in several times.
+email_sent = 100
 # Number of SMS messages that can be sent per hour. Requires auth.sms to be enabled.
 sms_sent = 30
 # Number of anonymous sign-ins that can be made per hour per IP address. Requires enable_anonymous_sign_ins = true.
@@ -254,6 +255,12 @@ otp_expiry = 3600
 # enabled = true
 # subject = "Your password has been changed"
 # content_path = "./supabase/templates/password_changed_notification.html"
+
+# Sign-in sends a 6-digit code (the extension can't receive a magic link). On a hosted
+# project, paste supabase/templates/magic_link.html into Auth > Email Templates > Magic Link.
+[auth.email.template.magic_link]
+subject = "Your Visual Memory sign-in code"
+content_path = "./supabase/templates/magic_link.html"
 
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.
