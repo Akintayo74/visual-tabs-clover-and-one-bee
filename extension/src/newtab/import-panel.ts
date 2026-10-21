@@ -1,17 +1,6 @@
-import type { WorkerMessage } from '@/src/lib/events';
+import { sendToWorker as send, type WorkerMessage } from '@/src/lib/events';
 import { type ImportState, subscribeImport, summarize } from '@/src/lib/import-state';
 import { displayDomain } from '@/src/lib/url';
-
-type Response<T> = { ok: true; result: T } | { ok: false; error: string };
-
-async function send<T>(message: WorkerMessage): Promise<T> {
-  const response = await browser.runtime.sendMessage<WorkerMessage, Response<T> | undefined>(
-    message,
-  );
-  if (!response) throw new Error('The extension did not respond.');
-  if (!response.ok) throw new Error(response.error);
-  return response.result;
-}
 
 function button(label: string, onClick: () => void, className = 'button'): HTMLButtonElement {
   const el = document.createElement('button');

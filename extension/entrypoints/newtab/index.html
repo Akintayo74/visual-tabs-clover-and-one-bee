@@ -10,10 +10,23 @@
       <header class="topbar">
         <h1 class="brand">Visual Memory</h1>
         <span class="count" data-testid="count"></span>
-        <button type="button" class="button import-trigger" data-testid="import-trigger">
-          Import open tabs
-        </button>
+        <span class="sync-status" data-testid="sync-status" aria-live="polite" hidden></span>
+        <div class="topbar-actions">
+          <button type="button" class="button import-trigger" data-testid="import-trigger">
+            Import open tabs
+          </button>
+          <button type="button" class="button export-trigger" data-testid="export-trigger">
+            Export
+          </button>
+          <button
+            type="button"
+            class="button account-trigger"
+            data-testid="account-trigger"
+            hidden
+          ></button>
+        </div>
       </header>
+      <section class="account" data-testid="account" hidden></section>
       <section class="import" data-testid="import" aria-live="polite" hidden></section>
       <p class="empty" data-testid="empty" hidden></p>
       <div class="wall" data-testid="wall"></div>

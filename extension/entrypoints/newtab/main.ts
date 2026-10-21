@@ -1,6 +1,7 @@
 import { listSaves } from '@/src/lib/db';
-import { subscribe, type WorkerMessage } from '@/src/lib/events';
+import { sendToWorker, subscribe, type WorkerMessage } from '@/src/lib/events';
 import type { SaveRecord } from '@/src/lib/types';
+import { AccountPanel } from '@/src/newtab/account-panel';
 import { Detail } from '@/src/newtab/detail';
 import { ImportPanel } from '@/src/newtab/import-panel';
 import type { NavKey } from '@/src/newtab/layout';
@@ -32,12 +33,55 @@ function retry(save: SaveRecord): void {
   void browser.runtime.sendMessage({ type: 'retry', id: save.id } satisfies WorkerMessage);
 }
 
-const detail = new Detail({ onRetry: retry });
+const detail = new Detail({
+  onRetry: retry,
+  onDeleted: () => {
+    // Tell the server (and so other devices) about the delete.
+    void sendToWorker({ type: 'sync-now' }).catch(() => undefined);
+  },
+});
 const wall = new Wall(wallEl, {
   onOpen: (save) => {
     void detail.show(save);
   },
   onRetry: retry,
+});
+
+const accountTrigger = document.querySelector<HTMLButtonElement>('.account-trigger');
+const accountPanel = document.querySelector<HTMLElement>('.account');
+const syncStatus = document.querySelector<HTMLElement>('.sync-status');
+if (accountTrigger && accountPanel && syncStatus) {
+  new AccountPanel(accountTrigger, accountPanel, syncStatus, (status) => {
+    wall.setSignedIn(status.email !== null);
+  });
+}
+
+const exportTrigger = document.querySelector<HTMLButtonElement>('.export-trigger');
+exportTrigger?.addEventListener('click', () => {
+  void (async () => {
+    exportTrigger.disabled = true;
+    exportTrigger.textContent = 'Preparing export…';
+    try {
+      // Full images of saves synced from another computer may not be downloaded yet.
+      await sendToWorker({ type: 'download-missing-images' }).catch(() => undefined);
+      // Loaded on demand so the zip code doesn't slow down opening a new tab.
+      const { buildExport, exportFileName } = await import('@/src/newtab/export');
+      const blob = await buildExport();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = exportFileName();
+      link.click();
+      setTimeout(() => {
+        URL.revokeObjectURL(link.href);
+      }, 60_000);
+    } catch (error) {
+      console.error('[export] failed', error);
+      alert(`Export failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      exportTrigger.disabled = false;
+      exportTrigger.textContent = 'Export';
+    }
+  })();
 });
 
 async function emptyMessage(): Promise<string> {

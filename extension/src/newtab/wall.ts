@@ -35,8 +35,15 @@ export function faviconUrl(pageUrl: string, size = 32): string {
   return url.toString();
 }
 
-function versionOf(save: SaveRecord): string {
-  return `${String(save.updatedAt)}:${save.status}`;
+function versionOf(save: SaveRecord, signedIn: boolean): string {
+  const sync = signedIn ? `${save.syncState}:${save.sync.error ?? ''}` : '';
+  return `${String(save.updatedAt)}:${save.status}:${sync}`;
+}
+
+/** Shown on a card while signed in and its current snapshot isn't uploaded yet. */
+export function syncBadge(save: SaveRecord, signedIn: boolean): string | null {
+  if (!signedIn || save.syncState !== 'pending' || save.status !== 'ready') return null;
+  return save.sync.error ? 'Backup failed, retrying' : 'Waiting to back up';
 }
 
 /**
@@ -49,6 +56,7 @@ export class Wall {
   private readonly mounted = new Map<string, Mounted>();
   private focusedIndex = -1;
   private frame = 0;
+  private signedIn = false;
 
   constructor(
     private readonly container: HTMLElement,
@@ -79,6 +87,13 @@ export class Wall {
       if (!ids.has(id)) this.unmount(id);
     }
     this.relayout();
+  }
+
+  /** Cards only show backup state while signed in; signed out, the status line covers it. */
+  setSignedIn(signedIn: boolean): void {
+    if (signedIn === this.signedIn) return;
+    this.signedIn = signedIn;
+    this.render();
   }
 
   get count(): number {
@@ -155,7 +170,7 @@ export class Wall {
         if (!save) continue;
         wanted.add(save.id);
         let mounted = this.mounted.get(save.id);
-        if (mounted?.version !== versionOf(save)) {
+        if (mounted?.version !== versionOf(save, this.signedIn)) {
           if (mounted) this.unmount(save.id);
           mounted = this.mount(save);
         }
@@ -211,6 +226,16 @@ export class Wall {
       image.append(badge);
     }
 
+    const backup = syncBadge(save, this.signedIn);
+    if (backup) {
+      const badge = document.createElement('span');
+      badge.className = 'card-sync';
+      badge.dataset.testid = 'card-sync';
+      badge.textContent = backup;
+      if (save.sync.error) badge.title = save.sync.error;
+      image.append(badge);
+    }
+
     const meta = document.createElement('div');
     meta.className = 'card-meta';
     const icon = document.createElement('img');
@@ -244,7 +269,7 @@ export class Wall {
       el.append(retry);
     }
 
-    const mounted: Mounted = { el, version: versionOf(save), objectUrl: null };
+    const mounted: Mounted = { el, version: versionOf(save, this.signedIn), objectUrl: null };
     this.mounted.set(save.id, mounted);
     this.container.append(el);
 

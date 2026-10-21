@@ -12,6 +12,7 @@ import { publish } from '@/src/lib/events';
 import type { Fingerprint } from '@/src/lib/types';
 import { dedupeKey, displayDomain, unsupportedReason } from '@/src/lib/url';
 import { imageSize, makeVariants } from './images';
+import { requestSync } from './sync';
 import { renderToast, TOAST_HOST_ID, type ToastState } from './toast';
 
 const FINGERPRINT_TIMEOUT_MS = 2000;
@@ -225,7 +226,11 @@ export function processSave(id: string): Promise<void> {
   const job = processingQueue
     .catch(() => undefined)
     .then(() => runProcessing(id))
-    .finally(() => inFlight.delete(id));
+    .finally(() => {
+      inFlight.delete(id);
+      // A processed save is ready to upload.
+      void requestSync();
+    });
   processingQueue = job;
   inFlight.set(id, job);
   return job;
