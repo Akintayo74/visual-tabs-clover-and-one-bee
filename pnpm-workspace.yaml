@@ -1,6 +1,9 @@
 packages:
   - extension
+  - server
+  - eval
 onlyBuiltDependencies:
+  - deno
   - esbuild
   - spawn-sync
   - supabase

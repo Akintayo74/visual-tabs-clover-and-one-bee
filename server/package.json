@@ -1,0 +1,23 @@
+{
+  "name": "server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit && deno check --config ../supabase/functions/process-save/deno.json ../supabase/functions/process-save/index.ts && deno check --config ../supabase/functions/search/deno.json ../supabase/functions/search/index.ts",
+    "test": "vitest run",
+    "test:functions": "vitest run --config vitest.functions.config.ts",
+    "mock-models": "tsx src/mock-models.ts",
+    "reprocess": "tsx src/reprocess.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.137.0",
+    "@supabase/supabase-js": "2.118.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "deno": "2.1.4",
+    "tsx": "^4.20.6",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.5"
+  }
+}
