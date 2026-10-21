@@ -93,7 +93,7 @@ search_events (
 )
 ```
 
-Row-level security on everything. Re-saving the same canonical URL updates the existing save with a new snapshot rather than creating a duplicate.
+Row-level security on everything. Re-saving the same page (matched on its normalised page URL) updates the existing save with a new snapshot rather than creating a duplicate. The canonical URL is stored but not used for matching, because some sites point every page's canonical at their homepage (decided 2026-10-20, Phase 2).
 
 ## Search pipeline
 
@@ -126,7 +126,7 @@ Each phase ends with something usable and a short checklist that must pass befor
 - Shortcuts for Save and Save & close; toolbar button as alternative.
 - Screenshot capture → full + card WebP versions.
 - Content script fingerprint extraction.
-- Store in IndexedDB; dedupe by canonical URL.
+- Store in IndexedDB; dedupe by page URL (originally canonical URL; changed in Phase 2).
 - New-tab wall: virtualized grid, detail view, open site, delete, keyboard nav.
 - Graceful handling of unsupported pages.
 

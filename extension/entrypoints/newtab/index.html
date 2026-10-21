@@ -10,7 +10,11 @@
       <header class="topbar">
         <h1 class="brand">Visual Memory</h1>
         <span class="count" data-testid="count"></span>
+        <button type="button" class="button import-trigger" data-testid="import-trigger">
+          Import open tabs
+        </button>
       </header>
+      <section class="import" data-testid="import" aria-live="polite" hidden></section>
       <p class="empty" data-testid="empty" hidden></p>
       <div class="wall" data-testid="wall"></div>
     </main>

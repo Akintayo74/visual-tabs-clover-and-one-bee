@@ -1,8 +1,15 @@
-import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import {
+  openDB,
+  type DBSchema,
+  type IDBPDatabase,
+  type IDBPObjectStore,
+  type StoreNames,
+} from 'idb';
 import type { Fingerprint, ImageVariant, SaveRecord } from './types';
+import { dedupeKey } from './url';
 
 export const DB_NAME = 'visual-memory';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 interface ImageRow {
   saveId: string;
@@ -29,18 +36,48 @@ interface Schema extends DBSchema {
 
 export type Db = IDBPDatabase<Schema>;
 
+/**
+ * Version 1 keyed saves on the canonical URL. Re-keys them on the page URL, which is what
+ * new saves use. A save whose new key another save already has keeps its old key, so the
+ * migration never merges or drops saves.
+ */
+async function rekeyByPageUrl(
+  saves: IDBPObjectStore<Schema, ArrayLike<StoreNames<Schema>>, 'saves', 'versionchange'>,
+): Promise<void> {
+  const records = await saves.getAll();
+  const taken = new Set(records.map((record) => record.dedupeKey));
+  for (const record of records) {
+    let key: string;
+    try {
+      key = dedupeKey(record.url);
+    } catch {
+      continue;
+    }
+    if (key === record.dedupeKey || taken.has(key)) continue;
+    taken.delete(record.dedupeKey);
+    taken.add(key);
+    await saves.put({ ...record, dedupeKey: key });
+  }
+}
+
 let dbPromise: Promise<Db> | null = null;
 
 export function getDb(): Promise<Db> {
   dbPromise ??= openDB<Schema>(DB_NAME, DB_VERSION, {
-    upgrade(db) {
-      const saves = db.createObjectStore('saves', { keyPath: 'id' });
-      saves.createIndex('byDedupeKey', 'dedupeKey', { unique: true });
-      saves.createIndex('byUpdatedAt', 'updatedAt');
-      saves.createIndex('byStatus', 'status');
-      db.createObjectStore('fingerprints', { keyPath: 'saveId' });
-      const images = db.createObjectStore('images', { keyPath: ['saveId', 'variant'] });
-      images.createIndex('bySaveId', 'saveId');
+    upgrade(db, oldVersion, _newVersion, tx) {
+      if (oldVersion < 1) {
+        const saves = db.createObjectStore('saves', { keyPath: 'id' });
+        saves.createIndex('byDedupeKey', 'dedupeKey', { unique: true });
+        saves.createIndex('byUpdatedAt', 'updatedAt');
+        saves.createIndex('byStatus', 'status');
+        db.createObjectStore('fingerprints', { keyPath: 'saveId' });
+        const images = db.createObjectStore('images', { keyPath: ['saveId', 'variant'] });
+        images.createIndex('bySaveId', 'saveId');
+      }
+      if (oldVersion === 1) {
+        // Only IndexedDB requests are awaited inside, so the upgrade transaction stays open.
+        void rekeyByPageUrl(tx.objectStore('saves'));
+      }
     },
   }).catch((error: unknown) => {
     dbPromise = null;

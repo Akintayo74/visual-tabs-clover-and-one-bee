@@ -32,20 +32,16 @@ describe('normalizeUrl', () => {
 });
 
 describe('dedupeKey', () => {
-  it('uses a same-site canonical URL', () => {
-    expect(
-      dedupeKey('https://example.com/p?id=1&ref=tw', 'https://www.example.com/products/1'),
-    ).toBe('https://example.com/products/1');
-  });
-
-  it('ignores a canonical on another host', () => {
-    expect(dedupeKey('https://studio.design/work', 'https://other.com/')).toBe(
-      'https://studio.design/work',
+  it('is the normalised page URL', () => {
+    expect(dedupeKey('https://www.example.com/p/1/?utm_source=x#top')).toBe(
+      'https://example.com/p/1',
     );
   });
 
-  it('ignores a malformed canonical', () => {
-    expect(dedupeKey('https://example.com/a', 'not a url')).toBe('https://example.com/a');
+  it('keeps different pages of one site apart', () => {
+    expect(dedupeKey('https://studio.design/work')).not.toBe(
+      dedupeKey('https://studio.design/about'),
+    );
   });
 });
 

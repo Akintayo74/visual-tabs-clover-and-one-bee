@@ -105,6 +105,10 @@ export const test = base.extend<Fixtures>({
     await use(async () => {
       const page = await context.newPage();
       await page.goto(`chrome-extension://${extensionId}/newtab.html`);
+      // The browser opens with a blank tab; close it so imports see only the tabs a test opens.
+      for (const other of context.pages()) {
+        if (other !== page && other.url() === 'about:blank') await other.close();
+      }
       return page;
     });
   },

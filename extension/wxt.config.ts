@@ -14,7 +14,12 @@ export default defineConfig({
       'notifications',
       'favicon',
       'unlimitedStorage',
+      // Import progress, so an import cut off by a service worker restart can resume.
+      'storage',
     ],
+    // Importing open tabs captures tabs without a keypress on each one, which activeTab
+    // can't cover. The new tab asks for this when you start an import, not at install.
+    optional_host_permissions: ['<all_urls>'],
     // e2e tests can't press shortcuts, so their build gets standing access instead of activeTab.
     host_permissions: mode === 'e2e' ? ['<all_urls>'] : [],
     action: { default_title: 'Save this page' },

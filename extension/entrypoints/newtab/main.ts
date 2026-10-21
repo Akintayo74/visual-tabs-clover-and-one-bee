@@ -2,6 +2,7 @@ import { listSaves } from '@/src/lib/db';
 import { subscribe, type WorkerMessage } from '@/src/lib/events';
 import type { SaveRecord } from '@/src/lib/types';
 import { Detail } from '@/src/newtab/detail';
+import { ImportPanel } from '@/src/newtab/import-panel';
 import type { NavKey } from '@/src/newtab/layout';
 import { Wall } from '@/src/newtab/wall';
 import './style.css';
@@ -22,6 +23,9 @@ const emptyEl = document.querySelector<HTMLElement>('.empty');
 const countEl = document.querySelector<HTMLElement>('.count');
 if (!wallEl || !emptyEl || !countEl) throw new Error('new tab markup is missing');
 const empty = emptyEl;
+const importTrigger = document.querySelector<HTMLButtonElement>('.import-trigger');
+const importPanel = document.querySelector<HTMLElement>('.import');
+if (importTrigger && importPanel) new ImportPanel(importTrigger, importPanel);
 const count = countEl;
 
 function retry(save: SaveRecord): void {
@@ -44,7 +48,7 @@ async function emptyMessage(): Promise<string> {
     Boolean,
   );
   return keys.length
-    ? `Nothing saved yet. Press ${keys.join(', or ')}. You can also click the toolbar button.`
+    ? `Nothing saved yet. Press ${keys.join(', or ')}. You can also click the toolbar button, or import all your open tabs.`
     : 'Nothing saved yet. Click the toolbar button on any site to save it.';
 }
 
