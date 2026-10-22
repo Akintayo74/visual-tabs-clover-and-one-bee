@@ -1,7 +1,7 @@
 import { listSaves } from '@/src/lib/db';
 import { applyFilters, hasFilters, NO_FILTERS, type Filters } from '@/src/lib/filters';
 import type { SearchResults } from '@/src/lib/search';
-import { sendToWorker, subscribe, type WorkerMessage } from '@/src/lib/events';
+import { sendToWorker, subscribe } from '@/src/lib/events';
 import type { SaveRecord } from '@/src/lib/types';
 import { AccountPanel } from '@/src/newtab/account-panel';
 import { Detail } from '@/src/newtab/detail';
@@ -49,7 +49,9 @@ if (importTrigger && importPanel) new ImportPanel(importTrigger, importPanel);
 const count = countEl;
 
 function retry(save: SaveRecord): void {
-  void browser.runtime.sendMessage({ type: 'retry', id: save.id } satisfies WorkerMessage);
+  void sendToWorker({ type: 'retry', id: save.id }).catch((error: unknown) => {
+    console.warn('[retry] failed', error);
+  });
 }
 
 function retryUnderstanding(save: SaveRecord): void {

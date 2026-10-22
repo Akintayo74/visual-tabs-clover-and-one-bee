@@ -134,11 +134,20 @@ export class Detail {
         return;
       }
       clearTimeout(confirmTimer);
-      void deleteSave(save.id).then(() => {
-        publish({ type: 'deleted', id: save.id });
-        this.callbacks.onDeleted(save);
-        this.dialog.close();
-      });
+      del.disabled = true;
+      deleteSave(save.id).then(
+        () => {
+          publish({ type: 'deleted', id: save.id });
+          this.callbacks.onDeleted(save);
+          this.dialog.close();
+        },
+        (error: unknown) => {
+          console.error('[delete] failed', error);
+          del.disabled = false;
+          del.classList.remove('confirming');
+          del.textContent = "Couldn't delete. Try again";
+        },
+      );
     });
     const close = el('button', { type: 'button', className: 'button', textContent: 'Close' });
     close.addEventListener('click', () => {
