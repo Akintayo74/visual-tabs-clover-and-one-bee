@@ -21,8 +21,11 @@ jobs:
         env:
           WXT_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           WXT_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+      # Uploads the built folder, so the downloaded artifact is itself the extension zip.
+      # .output is a hidden directory, which upload-artifact skips unless told otherwise.
       - uses: actions/upload-artifact@v7
         with:
           name: visual-tabs-chrome
-          path: extension/.output/visual-tabs-*-chrome.zip
+          path: extension/.output/chrome-mv3/
+          include-hidden-files: true
           if-no-files-found: error
