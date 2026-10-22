@@ -13,6 +13,9 @@ extension/   Chrome extension (Manifest V3, TypeScript, WXT)
   tests/         unit tests (Vitest)
   e2e/           browser tests that load the built extension (Playwright)
 supabase/    Supabase project: config.toml, migrations/, functions/ (Edge Functions)
+  functions/_shared/   the describe, embed and search pipeline the functions share
+server/      Node tooling for the functions: unit tests, function tests, mock models, reprocess job
+eval/        search evaluation: queries.json, query generator, hit@k runner
 ```
 
 ## Requirements
@@ -58,7 +61,8 @@ After a rebuild, click the reload icon on the extension's card in `chrome://exte
 | Save the current page     | `Alt+Shift+S`, or click the toolbar button                                |
 | Save and close the tab    | `Alt+Shift+X`, or right-click the toolbar button → **Save and close tab** |
 | Browse saves              | Open a new tab                                                            |
-| Move between cards        | Arrow keys, `Home`, `End`                                                 |
+| Search                    | Type in the search box (`/` focuses it, `Esc` clears it)                  |
+| Move between cards        | Arrow keys, `Home`, `End` (`↓` from the search box)                       |
 | Open a card's detail view | `Enter` or click                                                          |
 | Close the detail view     | `Esc`                                                                     |
 | Import every open tab     | **Import open tabs** on the new tab                                       |
@@ -80,6 +84,26 @@ The toolbar icon shows **…** as soon as the capture is taken and **✓** once 
 The in-page toast needs the page's own main thread, so on a page that is busy (some animated
 sites block it for seconds after loading) the toast can be late, but the save never waits for
 it. Reading the page's structure gives up after 2 seconds; the save is kept without it.
+
+### Search
+
+Describe the site the way you remember it: "a one-page site with only one section with large
+text on it", "dark portfolio with a 3D blob". Results come in two layers:
+
+1. **Quick matches**, on every keystroke, from the saves on this computer: titles, notes, fonts,
+   and (once a save is described) its recall phrases, tags and description. Typo-tolerant.
+2. **Best matches**, once you pause or press `Enter`, from the `search` Edge Function: the
+   query is embedded and compared with every save's screenshot-plus-description embedding,
+   combined with keyword search, and the top results are reranked
+   ([PLAN.md "Search pipeline"](PLAN.md#search-pipeline)). They replace the quick matches in
+   place. Signed out or offline, the quick matches stay and the line under the search box says
+   why.
+
+After a save is backed up, the server describes it (Claude Sonnet 5.5) and embeds it (Voyage).
+Its card shows **Describing…** meanwhile, or **Couldn't describe** with **Retry**; failures are
+retried automatically first (after 1 min, 5 min, 30 min, 2 h, then 6 h; six tries in all). The
+detail view shows the description, how the site might be remembered and its tags. Searches and
+the result you open are logged in `search_events` for tuning.
 
 ### Importing open tabs
 
@@ -155,8 +179,8 @@ pnpm exec supabase db push                # applies pending migrations to the li
 1. Create a project at [supabase.com](https://supabase.com/dashboard), then link it:
    `pnpm exec supabase link --project-ref <ref>`.
 2. Apply the schema: `pnpm exec supabase db push`. This creates the `saves` and `search_events`
-   tables with row-level security, the `upsert_save`/`delete_save` functions and the private
-   `screenshots` bucket.
+   tables with row-level security, the sync, processing-queue and search functions, and the
+   private `screenshots` bucket.
 3. Open the project's [email templates](https://supabase.com/dashboard/project/_/auth/templates)
    and replace the **Magic Link** template's body with
    [supabase/templates/magic_link.html](supabase/templates/magic_link.html), so the email
@@ -165,19 +189,54 @@ pnpm exec supabase db push                # applies pending migrations to the li
    rate-limited, so set up custom SMTP in the Auth settings before real use.
 4. Copy the project URL and the **publishable** key (Project Settings > API Keys) into
    `extension/.env`, then `pnpm build`. Never use the secret key in the extension.
+5. Set the model keys and deploy the Edge Functions (next section).
 
 ### Edge Functions
 
-Model API keys live only in Edge Function secrets. Copy [.env.example](.env.example) to
-`supabase/functions/.env` and fill it in (that file is git-ignored).
+Two functions, both in `supabase/functions/` with the shared code in `_shared/`:
+
+- `process-save` describes saves with Claude (`claude-sonnet-5-5`, versioned prompt in
+  `_shared/prompt.ts`), embeds the screenshot and the generated text together with Voyage
+  (`voyage-multimodal-3.5`, 1024 dimensions) and writes the result back. Saves wait in a queue
+  in the `saves` table; a call claims a few due ones, so two calls never describe the same save,
+  and a result is only written if no newer snapshot arrived meanwhile. The extension calls it
+  after each sync; failures back off and retry, then show **Couldn't describe** with Retry.
+- `search` runs the hybrid search for the signed-in user (vector top 50 + full-text top 50,
+  reciprocal rank fusion, Voyage `rerank-2.5` over the top 30). If Voyage is unreachable it
+  still answers from keywords and says which step it skipped.
+
+Model API keys live only in Edge Function secrets, never in the extension. Copy
+[.env.example](.env.example) to `supabase/functions/.env` and fill it in (that file is
+git-ignored).
 
 ```sh
 pnpm exec supabase functions serve                     # local, reads supabase/functions/.env
 pnpm exec supabase secrets set --env-file supabase/functions/.env
-pnpm exec supabase functions deploy <name>             # needs `supabase link` first
+pnpm exec supabase functions deploy process-save search   # needs `supabase link` first
 ```
 
-There are no functions yet; they arrive in Phase 4.
+Both functions check the caller themselves (a user's session, or the project's secret key),
+so `verify_jwt` is off for them in `supabase/config.toml`; deploy keeps that setting.
+
+**Prompt changes.** Edit `_shared/prompt.ts`, bump `PROMPT_VERSION`, deploy, then re-describe
+the saves made with older prompts:
+
+```sh
+SUPABASE_URL=https://<ref>.supabase.co SUPABASE_SECRET_KEY=sb_secret_... pnpm --filter server reprocess
+```
+
+It queues every save with an older `prompt_version` and keeps calling `process-save` until the
+queue is empty (`--force` re-describes everything). Old descriptions stay searchable until
+replaced, and it's safe to stop and run again.
+
+**Without keys.** `server/src/mock-models.ts` stands in for both APIs, for tests and local
+runs: `pnpm --filter server mock-models`, then
+`pnpm exec supabase functions serve --env-file server/functions.test.env`.
+
+In this repo's cloud containers the Edge Runtime container can't reach npm through the proxy;
+`DENO_DIR=/var/lib/docker/volumes/supabase_edge_runtime_visual-memory/_data
+server/node_modules/.bin/deno cache --config supabase/functions/<fn>/deno.json
+supabase/functions/<fn>/index.ts` fills its cache from the host first.
 
 ## How saves are stored
 
@@ -190,6 +249,9 @@ All data lives in the extension's IndexedDB database `visual-memory` (see
 - `images`: `raw` (the capture as taken, kept until processing succeeds), `full` (up to 2400px
   wide, WebP) and `card` (960px, WebP).
 - `deletions`: deletes made here that the server hasn't recorded yet.
+
+Each save record also carries the server's `understanding` once uploaded: its processing status,
+description, recall phrases and tags, which the quick search reads.
 
 Each save also records whether its current snapshot is uploaded (`syncState`) and what the
 server holds for it. Supabase is the source of truth once you sign in (see
@@ -208,7 +270,12 @@ pnpm --filter extension e2e   # browser tests: saves, the wall, fingerprints (Ch
 
 # These need the local stack running (pnpm db:start):
 pnpm --filter extension test:server   # database tests: upsert/delete rules, row-level security
-pnpm --filter extension e2e:sync      # backup and sync: sign-in, offline, reinstall, 2 browsers
+
+# These also need the functions served against the mock models (see Edge Functions):
+pnpm --filter server test:functions   # process-save and search: retries, claims, ranking, RLS
+pnpm --filter eval test:local         # the eval harness, end to end
+pnpm --filter server mock-models &    # then:
+pnpm --filter extension e2e:sync      # backup, sync, describing and search in the browser
 ```
 
 The e2e tests use Playwright's Chromium (`pnpm --filter extension exec playwright install chromium`).
@@ -241,6 +308,26 @@ The plan asked for a modern extension framework such as WXT or Vite + CRXJS. We 
 CRXJS is a good Vite plugin, but it only covers the build step; the test helpers, packaging and
 entrypoint conventions above would be ours to build and maintain.
 
-## Evaluation
+## Search evaluation
 
-The search eval (`eval/`) arrives in Phase 4.
+```sh
+pnpm eval              # hit@1, hit@3, hit@5 and MRR per query set, plus every miss
+pnpm eval:generate     # adds generated queries for saves that have none (needs ANTHROPIC_API_KEY)
+```
+
+Both run against a deployed project as the trial user. Set `SUPABASE_URL`,
+`SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` (used only to sign in as that user; no email
+is sent) and `EVAL_USER_EMAIL`. Searches made by the eval aren't logged as real searches.
+
+Query sets:
+
+- **real** ([eval/queries.json](eval/queries.json)): the trial user's own searches, each mapped
+  to the site he meant by URL. The PLAN.md targets (right site first ~70%, top 5 ~90%) apply to
+  these.
+- **tune** and **holdout** (`eval/generated-queries.json`): three queries per save (vague,
+  structural, slightly misremembered), written by a different model (`claude-opus-5-5`) from
+  the screenshot alone, with no access to the description, recall phrases, tags or
+  measurements, so the pipeline isn't grading its own words. Saves are split 70/30 by id.
+  Tune prompts against **tune**; **holdout** shows whether a gain is real.
+
+Results are also written to `eval/results/` (git-ignored).

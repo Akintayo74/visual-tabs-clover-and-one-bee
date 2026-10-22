@@ -6,8 +6,15 @@ import {
   type IDBPTransaction,
   type StoreNames,
 } from 'idb';
-import type { RemoteSave } from './remote';
-import type { Fingerprint, ImageVariant, RemoteRef, SaveRecord, SyncInfo } from './types';
+import { understandingOf, type RemoteSave } from './remote';
+import type {
+  Fingerprint,
+  ImageVariant,
+  RemoteRef,
+  SaveRecord,
+  SyncInfo,
+  Understanding,
+} from './types';
 import { dedupeKey } from './url';
 
 export const DB_NAME = 'visual-memory';
@@ -170,6 +177,8 @@ export async function upsertSnapshot(
     syncState: 'pending',
     sync: freshSync(existing?.sync.remote ?? null),
   };
+  // The old snapshot's description keeps it findable until the new one is described.
+  if (existing?.understanding) record.understanding = existing.understanding;
 
   const images = tx.objectStore('images');
   if (existing) {
@@ -410,6 +419,7 @@ export async function storeRemoteSave(
     note: row.note ?? previous?.note ?? null,
     syncState: 'synced',
     sync: freshSync(remoteRef(row)),
+    understanding: understandingOf(row),
   };
   await saves.put(record);
   const imageStore = tx.objectStore('images');
@@ -420,6 +430,23 @@ export async function storeRemoteSave(
   }
   await tx.done;
   return true;
+}
+
+/** Stores the server's processing state and output for a save. */
+export async function storeUnderstanding(id: string, understanding: Understanding): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction('saves', 'readwrite');
+  const record = await tx.store.get(id);
+  if (record) await tx.store.put({ ...record, understanding });
+  await tx.done;
+}
+
+/** Whether any uploaded save is still waiting for the server to describe it. */
+export async function hasUnprocessedSaves(): Promise<boolean> {
+  const synced = await (await getDb()).getAllFromIndex('saves', 'bySyncState', 'synced');
+  return synced.some(
+    (s) => s.understanding?.status === 'pending' || s.understanding?.status === 'processing',
+  );
 }
 
 export async function getSaveByDedupeKey(key: string): Promise<SaveRecord | undefined> {

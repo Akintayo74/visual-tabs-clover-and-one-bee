@@ -1,0 +1,21 @@
+{
+  "name": "eval",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/run.ts",
+    "generate": "tsx src/generate.ts",
+    "typecheck": "tsc --noEmit",
+    "test:local": "vitest run"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.137.0",
+    "@supabase/supabase-js": "2.118.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsx": "^4.20.6",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.5"
+  }
+}

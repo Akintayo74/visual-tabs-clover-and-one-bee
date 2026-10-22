@@ -52,6 +52,8 @@ Visual design can be rough in v1 and will be iterated. Reliability and search qu
 | Card | 960px | WebP ~q75 | 60–120 KB | Grid |
 | Model input | ~1500px | WebP/JPEG | — | Sent to Claude and Voyage, not stored |
 
+*Phase 4:* the Edge Function has no image tools, so it sends the stored Full version (2400px WebP) as the model input; that is within Claude's 2576px limit. A smaller upload just for the models can be added if cost or latency calls for it.
+
 ### Page fingerprint (content script)
 - URL, canonical URL, title, site name, favicon
 - Page height in viewport-heights; count of sections; presence of header/nav/footer
@@ -152,6 +154,7 @@ Each phase ends with something usable and a short checklist that must pass befor
 - "Reprocess all" job for when prompts change.
 - Edge Function `search` as described above; instant local layer in the UI.
 - **Evaluation harness:** `eval/queries.json` with real queries from our user mapped to the save(s) he means; a script reports hit@1, hit@3, hit@5. Iterate on prompts and fingerprint until targets are met.
+  - *Decided 2026-10-21:* asking him for 20–30 queries is too much. Tuning uses a generated set instead: a separate model sees only each screenshot and writes three from-memory queries (vague, structural, slightly misremembered), split 70/30 into tune and holdout by save. He's asked for just 5–10 real queries, which confirm the targets below; real searches logged in `search_events` during the trial add more.
 
 **Done when:** on his real queries, the right site is #1 at least ~70% of the time and in the top 5 at least ~90%, and his example query above finds the right site.
 

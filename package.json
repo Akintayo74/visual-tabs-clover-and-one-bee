@@ -16,7 +16,9 @@
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
-    "db:reset": "supabase db reset"
+    "db:reset": "supabase db reset",
+    "eval": "pnpm --filter eval start",
+    "eval:generate": "pnpm --filter eval generate"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -19,6 +19,10 @@ export interface ExportedSave {
   fonts: string[];
   note: string | null;
   fingerprint: Fingerprint | null;
+  /** What the model made of the save, once the server has described it. */
+  description: string | null;
+  recallPhrases: string[];
+  tags: string[];
   /** Paths inside the zip. `raw` is only there for saves whose images weren't processed yet. */
   images: Partial<Record<ImageVariant, string>>;
 }
@@ -51,6 +55,9 @@ export function exportedSave(
     fonts: save.fonts,
     note: save.note,
     fingerprint,
+    description: save.understanding?.description ?? null,
+    recallPhrases: save.understanding?.recallPhrases ?? [],
+    tags: save.understanding?.tags ?? [],
     images: Object.fromEntries(variants.map((v) => [v, `images/${save.id}-${v}.${EXTENSIONS[v]}`])),
   };
 }

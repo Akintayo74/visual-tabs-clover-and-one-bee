@@ -1,0 +1,10 @@
+{
+  "about": "Real searches from our trial user, each mapped to the saved site(s) he meant, by page URL. Queries with an empty 'expected' list are skipped until someone fills in the site. The search targets in PLAN.md apply to these.",
+  "queries": [
+    {
+      "query": "a one-page site with only one section with large text on it. Each text takes you to a particular page.",
+      "expected": [],
+      "note": "His example from PLAN.md. Fill in the URL of the site he meant."
+    }
+  ]
+}

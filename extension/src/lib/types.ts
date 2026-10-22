@@ -66,6 +66,17 @@ export interface SaveRecord {
   /** 'pending' until the current snapshot is uploaded; indexed so the upload queue is cheap to list. */
   syncState: SyncState;
   sync: SyncInfo;
+  /** What the model made of the save, from the server. Absent until the save has been uploaded. */
+  understanding?: Understanding;
+}
+
+/** The server's processing of a save (Phase 4): description, recall phrases and tags. */
+export interface Understanding {
+  status: 'pending' | 'processing' | 'ready' | 'failed';
+  error: string | null;
+  description: string | null;
+  recallPhrases: string[];
+  tags: string[];
 }
 
 export type SyncState = 'pending' | 'synced';

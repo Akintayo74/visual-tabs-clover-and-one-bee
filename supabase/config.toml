@@ -393,6 +393,14 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# Both functions check the caller themselves (a user's session, or the secret key for the
+# reprocess job), because the gateway's JWT check doesn't accept the new sb_secret_ keys.
+[functions.process-save]
+verify_jwt = false
+
+[functions.search]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

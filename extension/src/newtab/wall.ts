@@ -16,8 +16,9 @@ const MAX_ASPECT = 1.25;
 const OVERSCAN_VIEWPORTS = 1;
 
 export interface WallCallbacks {
-  onOpen(save: SaveRecord): void;
+  onOpen(save: SaveRecord, index: number): void;
   onRetry(save: SaveRecord): void;
+  onRetryUnderstanding(save: SaveRecord): void;
 }
 
 interface Mounted {
@@ -36,8 +37,24 @@ export function faviconUrl(pageUrl: string, size = 32): string {
 }
 
 function versionOf(save: SaveRecord, signedIn: boolean): string {
-  const sync = signedIn ? `${save.syncState}:${save.sync.error ?? ''}` : '';
+  const sync = signedIn
+    ? `${save.syncState}:${save.sync.error ?? ''}:${save.understanding?.status ?? ''}`
+    : '';
   return `${String(save.updatedAt)}:${save.status}:${sync}`;
+}
+
+/** Shown on an uploaded card while the server describes it, or when it couldn't. */
+export function understandingBadge(save: SaveRecord, signedIn: boolean): string | null {
+  if (!signedIn || save.status !== 'ready' || save.syncState !== 'synced') return null;
+  switch (save.understanding?.status) {
+    case 'pending':
+    case 'processing':
+      return save.understanding.error ? 'Describing, retrying soon' : 'Describing…';
+    case 'failed':
+      return "Couldn't describe";
+    default:
+      return null;
+  }
 }
 
 /** Shown on a card while signed in and its current snapshot isn't uploaded yet. */
@@ -207,7 +224,7 @@ export class Wall {
     hit.type = 'button';
     hit.setAttribute('aria-label', `${save.title} (${displayDomain(save.url)})`);
     hit.addEventListener('click', () => {
-      this.callbacks.onOpen(save);
+      this.callbacks.onOpen(save, Number(el.dataset.index ?? -1));
     });
 
     const image = document.createElement('div');
@@ -233,6 +250,16 @@ export class Wall {
       badge.dataset.testid = 'card-sync';
       badge.textContent = backup;
       if (save.sync.error) badge.title = save.sync.error;
+      image.append(badge);
+    }
+
+    const described = understandingBadge(save, this.signedIn);
+    if (described) {
+      const badge = document.createElement('span');
+      badge.className = 'card-sync';
+      badge.dataset.testid = 'card-understanding';
+      badge.textContent = described;
+      if (save.understanding?.error) badge.title = save.understanding.error;
       image.append(badge);
     }
 
@@ -265,6 +292,15 @@ export class Wall {
       retry.textContent = 'Retry';
       retry.addEventListener('click', () => {
         this.callbacks.onRetry(save);
+      });
+      el.append(retry);
+    } else if (described && save.understanding?.status === 'failed') {
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.className = 'card-retry';
+      retry.textContent = 'Retry';
+      retry.addEventListener('click', () => {
+        this.callbacks.onRetryUnderstanding(save);
       });
       el.append(retry);
     }
