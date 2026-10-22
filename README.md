@@ -65,6 +65,11 @@ After a rebuild, click the reload icon on the extension's card in `chrome://exte
 | Move between cards        | Arrow keys, `Home`, `End` (`↓` from the search box)                       |
 | Open a card's detail view | `Enter` or click                                                          |
 | Close the detail view     | `Esc`                                                                     |
+| Add a note to a save      | Type in **Your note** in the detail view (stored as you type)             |
+| Find look-alikes          | **More like this** in the detail view (`Esc` goes back)                   |
+| Filter the wall           | Colour swatches, font and date menus under the search box                 |
+| Cards per row             | **Auto / 2 / 3 / 4** at the right of the filters                          |
+| How it works              | **Help** on the new tab                                                   |
 | Import every open tab     | **Import open tabs** on the new tab                                       |
 | Cancel an import          | **Cancel** on the new tab, or click the toolbar button                    |
 | Back up and sync          | **Sign in to back up** on the new tab                                     |
@@ -104,6 +109,23 @@ Its card shows **Describing…** meanwhile, or **Couldn't describe** with **Retr
 retried automatically first (after 1 min, 5 min, 30 min, 2 h, then 6 h; six tries in all). The
 detail view shows the description, how the site might be remembered and its tags. Searches and
 the result you open are logged in `search_events` for tuning.
+
+### Notes, look-alikes and filters
+
+- **Notes.** Each save has a note in its detail view. It's stored on this computer as you type
+  and backed up by sync; when two computers edit the same note, the later edit wins. Notes are
+  searched by the quick matches, by keyword search on the server and by the reranker. Editing a
+  note doesn't describe the save again.
+- **More like this** shows saves that look alike. It starts with what this computer knows
+  (shared tags, fonts, colours and site) and then shows the server's nearest saves by their
+  stored screenshot-plus-description embeddings (`similar_saves`). It makes no model call, so it
+  costs nothing. Signed out, offline, or before the save is described, the local matches stay
+  and the line under the search box says so.
+- **Filters** narrow whatever the wall shows: everything, search results or look-alikes.
+  **Colour** matches the colour family (red, blue, black, white…) of a save's five most
+  prominent colours. **Font** lists the library's fonts, most used first. **Date** is when the
+  site was first saved, so re-saving it doesn't make it new. Filters reset with each new tab;
+  the cards-per-row choice is remembered on this computer.
 
 ### Importing open tabs
 
@@ -152,6 +174,31 @@ synced from another computer but aren't here yet.
   stops the extension's background worker.
 - Access to all sites (optional): asked for the first time you import open tabs, because the
   import captures tabs without a keypress on each one. Saving single pages never needs it.
+
+## Packaging for the trial
+
+The trial build is a zip that loads as an unpacked extension (installation steps for the trial
+user are in [INSTALL.md](INSTALL.md)):
+
+```sh
+# extension/.env holds the hosted project's URL and publishable key (see Hosted Supabase project)
+pnpm package   # → extension/.output/visual-memory-<version>-chrome.zip
+```
+
+`pnpm package` refuses to build without the hosted project's URL and publishable key, or with a
+local one, so a trial build can always back up. The version comes from
+`extension/package.json`; bump it for each build you hand over.
+
+Without a GitHub checkout, run the **Package** workflow from the repository's **Actions** tab
+(**Run workflow**). It reads the repository variables `SUPABASE_URL` and
+`SUPABASE_PUBLISHABLE_KEY` (Settings > Secrets and variables > Actions > Variables; both are
+public values) and attaches the zip to the run.
+
+The packaged build has a fixed extension id (`mipdebknhogpnnhmddnbjdflelnihkpi`, from the public
+key in `extension/wxt.config.ts`). An unpacked extension's id otherwise comes from its folder,
+and the local library belongs to the id: with a fixed id, loading an update from a different
+folder keeps everything. `pnpm build` sets it too; `pnpm dev` and the e2e build don't. A Chrome Web Store listing
+would get its own id and needs the `key` field left out.
 
 ## Local Supabase
 
@@ -275,7 +322,7 @@ pnpm --filter extension test:server   # database tests: upsert/delete rules, row
 pnpm --filter server test:functions   # process-save and search: retries, claims, ranking, RLS
 pnpm --filter eval test:local         # the eval harness, end to end
 pnpm --filter server mock-models &    # then:
-pnpm --filter extension e2e:sync      # backup, sync, describing and search in the browser
+pnpm --filter extension e2e:sync      # backup, sync, notes, describing, search and look-alikes
 ```
 
 The e2e tests use Playwright's Chromium (`pnpm --filter extension exec playwright install chromium`).

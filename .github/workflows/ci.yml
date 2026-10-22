@@ -20,6 +20,12 @@ jobs:
       - run: pnpm format:check
       - run: pnpm typecheck
       - run: pnpm test
+      # The trial zip builds (with placeholder project values; the real ones come from the
+      # Package workflow).
+      - run: pnpm package
+        env:
+          WXT_SUPABASE_URL: https://example.supabase.co
+          WXT_SUPABASE_PUBLISHABLE_KEY: sb_publishable_placeholder
       - run: pnpm --filter extension exec playwright install --with-deps chromium
       - run: pnpm --filter extension e2e
 
