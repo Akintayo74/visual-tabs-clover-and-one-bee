@@ -238,6 +238,12 @@ pnpm exec supabase db push                # applies pending migrations to the li
    `extension/.env`, then `pnpm build`. Never use the secret key in the extension.
 5. Set the model keys and deploy the Edge Functions (next section).
 
+Steps 1, 2 and 5 can run from GitHub instead of your machine: add the settings listed at the
+top of [.github/workflows/deploy.yml](.github/workflows/deploy.yml) under **Settings > Secrets
+and variables > Actions**, then run **Actions > Deploy**. Run it again after merging new
+migrations or function changes. For the trial zip, add the variables `SUPABASE_URL` and
+`SUPABASE_PUBLISHABLE_KEY` and run **Actions > Package**.
+
 ### Edge Functions
 
 Two functions, both in `supabase/functions/` with the shared code in `_shared/`:
