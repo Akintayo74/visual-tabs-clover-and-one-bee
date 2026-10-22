@@ -41,6 +41,19 @@ export function columnsForWidth(width: number): number {
   return 1;
 }
 
+/** Cards per row the density toggle offers; null means "fit the window" (columnsForWidth). */
+export type Density = 2 | 3 | 4 | null;
+export const DENSITIES: Exclude<Density, null>[] = [2, 3, 4];
+/** Cards never get narrower than this, whatever density is chosen. */
+const MIN_CARD_WIDTH = 220;
+
+/** Columns for a chosen density, fewer when the window is too narrow to fit them. */
+export function columnsFor(width: number, density: Density, gap: number): number {
+  if (density === null) return columnsForWidth(width);
+  const fit = Math.max(1, Math.floor((width + gap) / (MIN_CARD_WIDTH + gap)));
+  return Math.min(density, fit);
+}
+
 /** Positions every card. Rows are as tall as their tallest image. */
 export function computeLayout(items: LayoutInput[], options: LayoutOptions): Layout {
   const { width, gap, metaHeight, maxAspect } = options;
