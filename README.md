@@ -230,9 +230,10 @@ pnpm exec supabase db push                # applies pending migrations to the li
    tables with row-level security, the sync, processing-queue and search functions, and the
    private `screenshots` bucket.
 3. Open the project's [email templates](https://supabase.com/dashboard/project/_/auth/templates)
-   and replace the **Magic Link** template's body with
+   and replace the body of both the **Magic Link** and the **Confirm signup** templates with
    [supabase/templates/magic_link.html](supabase/templates/magic_link.html), so the email
-   carries a code (the extension can't receive a magic link). Email sign-in is on by default
+   carries a code (the extension can't receive a magic link). Hosted projects confirm new
+   addresses, so a first sign-in gets the Confirm signup email; locally confirmations are off. Email sign-in is on by default
    (**Authentication > Sign In / Providers**). Supabase's built-in email sender is
    rate-limited, so set up custom SMTP in the Auth settings before real use.
 4. Copy the project URL and the **publishable** key (Project Settings > API Keys) into
