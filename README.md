@@ -192,7 +192,8 @@ local one, so a trial build can always back up. The version comes from
 Without a GitHub checkout, run the **Package** workflow from the repository's **Actions** tab
 (**Run workflow**). It reads the repository variables `SUPABASE_URL` and
 `SUPABASE_PUBLISHABLE_KEY` (Settings > Secrets and variables > Actions > Variables; both are
-public values) and attaches the zip to the run.
+public values) and attaches the extension to the run as `visual-tabs-chrome.zip`, ready to
+send.
 
 The packaged build has a fixed extension id (`mipdebknhogpnnhmddnbjdflelnihkpi`, from the public
 key in `extension/wxt.config.ts`). An unpacked extension's id otherwise comes from its folder,
