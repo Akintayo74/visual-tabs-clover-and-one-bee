@@ -1,4 +1,4 @@
-# Visual Memory
+# Visual Tabs
 
 A Chrome extension that saves a site exactly as it looked, and a new-tab wall that finds it again
 when you describe what you saw. See [PLAN.md](PLAN.md) for the mission, decisions and phases, and
@@ -182,7 +182,7 @@ user are in [INSTALL.md](INSTALL.md)):
 
 ```sh
 # extension/.env holds the hosted project's URL and publishable key (see Hosted Supabase project)
-pnpm package   # → extension/.output/visual-memory-<version>-chrome.zip
+pnpm package   # → extension/.output/visual-tabs-<version>-chrome.zip
 ```
 
 `pnpm package` refuses to build without the hosted project's URL and publishable key, or with a
@@ -293,7 +293,7 @@ supabase/functions/<fn>/index.ts` fills its cache from the host first.
 
 ## How saves are stored
 
-All data lives in the extension's IndexedDB database `visual-memory` (see
+All data lives in the extension's IndexedDB database `visual-memory` (the product's first name, kept so existing libraries stay put; see
 `extension/src/lib/db.ts`):
 
 - `saves`: one small record per site (URL, title, status, palette, fonts). The new tab loads all

@@ -259,7 +259,7 @@ otp_expiry = 3600
 # Sign-in sends a 6-digit code (the extension can't receive a magic link). On a hosted
 # project, paste supabase/templates/magic_link.html into Auth > Email Templates > Magic Link.
 [auth.email.template.magic_link]
-subject = "Your Visual Memory sign-in code"
+subject = "Your Visual Tabs sign-in code"
 content_path = "./supabase/templates/magic_link.html"
 
 [auth.sms]

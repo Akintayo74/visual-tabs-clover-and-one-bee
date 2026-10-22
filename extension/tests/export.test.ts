@@ -69,7 +69,7 @@ describe('buildExport', () => {
 
   it('names the file with the date', () => {
     expect(exportFileName(new Date('2026-10-21T12:00:00Z'))).toBe(
-      'visual-memory-export-2026-10-21.zip',
+      'visual-tabs-export-2026-10-21.zip',
     );
   });
 });

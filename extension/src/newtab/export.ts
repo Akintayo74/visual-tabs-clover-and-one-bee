@@ -107,5 +107,5 @@ export async function buildExport(now = new Date()): Promise<Blob> {
 }
 
 export function exportFileName(now = new Date()): string {
-  return `visual-memory-export-${now.toISOString().slice(0, 10)}.zip`;
+  return `visual-tabs-export-${now.toISOString().slice(0, 10)}.zip`;
 }
