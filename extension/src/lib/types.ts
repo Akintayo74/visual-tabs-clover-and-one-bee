@@ -63,6 +63,10 @@ export interface SaveRecord {
   palette: string[];
   fonts: string[];
   note: string | null;
+  /** When the note was last edited (ms). Absent for saves whose note was never edited. */
+  noteUpdatedAt?: number | null;
+  /** True while a note edit made on this device hasn't reached the server. */
+  notePending?: boolean;
   /** 'pending' until the current snapshot is uploaded; indexed so the upload queue is cheap to list. */
   syncState: SyncState;
   sync: SyncInfo;

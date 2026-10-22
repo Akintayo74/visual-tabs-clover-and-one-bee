@@ -103,6 +103,18 @@ group('searchText', () => {
     });
     expect(text).toBe('Studio — Home\n\na\nb\n\nTags: t\n\nDesc.');
   });
+
+  it("adds the user's note after the name when there is one", () => {
+    const text = searchText({
+      title: 'Home',
+      siteName: '',
+      description: null,
+      recallPhrases: null,
+      tags: null,
+      note: 'the one Tolu sent',
+    });
+    expect(text).toBe('Home\n\nNote: the one Tolu sent');
+  });
 });
 
 function fakeClient(response: unknown, error?: Error) {
@@ -274,6 +286,7 @@ group('helpers', () => {
       description: null,
       recall_phrases: null,
       tags: null,
+      note: null,
     });
     const candidates = [c('a', 0.3), c('b', 0.2), c('c', 0.1)];
     expect(

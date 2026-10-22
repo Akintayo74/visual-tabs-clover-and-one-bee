@@ -232,3 +232,158 @@ describe('row-level security', () => {
     expect(error).not.toBeNull();
   });
 });
+
+interface NoteResult {
+  found: boolean;
+  applied: boolean;
+  note: string | null;
+  note_updated_at: string | null;
+}
+
+async function setNote(
+  client: SupabaseClient,
+  id: string,
+  note: string,
+  at: string,
+): Promise<NoteResult> {
+  const { data, error } = (await client.rpc('set_note', {
+    save_id: id,
+    new_note: note,
+    edited_at: at,
+  })) as { data: unknown; error: { message: string } | null };
+  if (error) throw new Error(error.message);
+  return data as NoteResult;
+}
+
+describe('set_note', () => {
+  let alice: { client: SupabaseClient; id: string };
+  let mallory: { client: SupabaseClient; id: string };
+
+  beforeAll(async () => {
+    alice = await newUser('alice');
+    mallory = await newUser('mallory');
+  });
+
+  it('stores a note without asking for the save to be described again', async () => {
+    const snap = snapshot();
+    await upsert(alice.client, snap);
+    const admin = createClient(url, secretKey, noSession);
+    await admin.from('saves').update({ status: 'ready' }).eq('id', snap.id);
+
+    const result = await setNote(
+      alice.client,
+      snap.id as string,
+      '  for the Kola pitch ',
+      '2026-10-10T10:00:00Z',
+    );
+    expect(result).toMatchObject({ found: true, applied: true, note: 'for the Kola pitch' });
+    const { data } = await alice.client
+      .from('saves')
+      .select('note,status')
+      .eq('id', snap.id)
+      .single();
+    expect(data).toEqual({ note: 'for the Kola pitch', status: 'ready' });
+  });
+
+  it('keeps the latest edit when two devices edit the note', async () => {
+    const snap = snapshot();
+    await upsert(alice.client, snap);
+    const id = snap.id as string;
+    await setNote(alice.client, id, 'newer', '2026-10-10T12:00:00Z');
+    const stale = await setNote(alice.client, id, 'older', '2026-10-10T11:00:00Z');
+    expect(stale).toMatchObject({ applied: false, note: 'newer' });
+    const cleared = await setNote(alice.client, id, '   ', '2026-10-10T13:00:00Z');
+    expect(cleared).toMatchObject({ applied: true, note: null });
+  });
+
+  it('makes the note findable by keyword search', async () => {
+    const snap = snapshot({ title: 'Unrelated' });
+    await upsert(alice.client, snap);
+    await setNote(
+      alice.client,
+      snap.id as string,
+      'zebrastripes moodboard',
+      '2026-10-10T10:00:00Z',
+    );
+    const { data } = (await alice.client.rpc('search_saves', {
+      query_text: 'zebrastripes',
+      query_embedding: null,
+    })) as { data: { id: string; note: string }[] | null };
+    expect(data?.map((r) => r.id)).toEqual([snap.id]);
+    expect(data?.[0]?.note).toBe('zebrastripes moodboard');
+  });
+
+  it("can't reach other users' saves or deleted ones", async () => {
+    const snap = snapshot();
+    await upsert(alice.client, snap);
+    const id = snap.id as string;
+    expect(await setNote(mallory.client, id, 'hi', '2026-10-10T10:00:00Z')).toMatchObject({
+      found: false,
+      applied: false,
+    });
+    await alice.client.rpc('delete_save', { save_id: id });
+    expect(await setNote(alice.client, id, 'hi', '2026-10-10T10:00:00Z')).toMatchObject({
+      found: false,
+    });
+  });
+});
+
+describe('similar_saves', () => {
+  let alice: { client: SupabaseClient; id: string };
+  let mallory: { client: SupabaseClient; id: string };
+
+  /** A unit-ish vector pointing mostly along `axis`. */
+  function vector(axis: number, lean = 0): string {
+    const v = Array.from({ length: 1024 }, (_, i) => (i === axis ? 1 : i === axis + 1 ? lean : 0));
+    return `[${v.join(',')}]`;
+  }
+
+  async function described(
+    owner: { client: SupabaseClient },
+    embedding: string | null,
+  ): Promise<string> {
+    const snap = snapshot();
+    await upsert(owner.client, snap);
+    const admin = createClient(url, secretKey, noSession);
+    const { error } = await admin
+      .from('saves')
+      .update({ embedding, status: embedding ? 'ready' : 'pending' })
+      .eq('id', snap.id);
+    if (error) throw new Error(error.message);
+    return snap.id as string;
+  }
+
+  beforeAll(async () => {
+    alice = await newUser('alice');
+    mallory = await newUser('mallory');
+  });
+
+  it('lists the nearest of the same user’s described saves, closest first', async () => {
+    const source = await described(alice, vector(0));
+    const near = await described(alice, vector(0, 0.2));
+    const far = await described(alice, vector(5));
+    const middle = await described(alice, vector(0, 1));
+    await described(alice, null);
+    await described(mallory, vector(0, 0.1));
+    const deleted = await described(alice, vector(0, 0.05));
+    await alice.client.rpc('delete_save', { save_id: deleted });
+
+    const { data, error } = (await alice.client.rpc('similar_saves', { save_id: source })) as {
+      data: { id: string; distance: number }[] | null;
+      error: unknown;
+    };
+    expect(error).toBeNull();
+    expect(data?.map((r) => r.id)).toEqual([near, middle, far]);
+  });
+
+  it('is empty for a save that has not been described, or someone else’s', async () => {
+    const pending = await described(alice, null);
+    const theirs = await described(mallory, vector(2));
+    for (const id of [pending, theirs]) {
+      const { data } = (await alice.client.rpc('similar_saves', { save_id: id })) as {
+        data: unknown[] | null;
+      };
+      expect(data).toEqual([]);
+    }
+  });
+});

@@ -8,6 +8,7 @@ import {
   getImage,
   getSave,
   hasUnprocessedSaves,
+  listPendingNotes,
   listDeletions,
   listMissingFullImages,
   listSaves,
@@ -19,7 +20,10 @@ import {
   remoteRef,
   resetDbForTests,
   resetForNewAccount,
+  setNote,
+  settleNote,
   storeFullImage,
+  storeRemoteNote,
   storeRemoteSave,
   storeUnderstanding,
   upsertSnapshot,
@@ -69,6 +73,7 @@ function row(overrides: Partial<RemoteSave> = {}): RemoteSave {
     palette: ['#fff'],
     fonts: ['Inter'],
     note: null,
+    note_updated_at: null,
     status: 'ready',
     error: null,
     description: 'A studio site.',
@@ -237,5 +242,68 @@ describe('understanding from the server', () => {
   it('ignores saves that are not uploaded yet', async () => {
     await readySave();
     expect(await hasUnprocessedSaves()).toBe(false);
+  });
+});
+
+describe('notes', () => {
+  const synced = () =>
+    storeRemoteSave(row({ note: 'from the server', note_updated_at: '2026-10-03T00:00:00.000Z' }), {
+      card: new Blob(['c']),
+      full: null,
+    });
+
+  it('an edit waits for upload, and only once the server has the save', async () => {
+    const local = await readySave({ dedupeKey: 'https://local.example' });
+    await setNote(local.id, 'not uploaded yet', 10);
+    await synced();
+    await setNote('remote-1', '  pitch deck refs  ', 20);
+    expect(await getSave('remote-1')).toMatchObject({
+      note: 'pitch deck refs',
+      noteUpdatedAt: 20,
+      notePending: true,
+    });
+    expect((await listPendingNotes()).map((s) => s.id)).toEqual(['remote-1']);
+  });
+
+  it('settles an upload, or takes the later edit from another device', async () => {
+    await synced();
+    await setNote('remote-1', 'mine', 20);
+    expect(await settleNote('remote-1', 20, { note: 'mine', noteUpdatedAt: 20 })).toBe(false);
+    expect(await getSave('remote-1')).toMatchObject({ note: 'mine', notePending: false });
+
+    await setNote('remote-1', 'older', 30);
+    expect(await settleNote('remote-1', 30, { note: 'newer', noteUpdatedAt: 40 })).toBe(true);
+    expect(await getSave('remote-1')).toMatchObject({ note: 'newer', noteUpdatedAt: 40 });
+  });
+
+  it('keeps a newer edit made while an upload was in flight', async () => {
+    await synced();
+    await setNote('remote-1', 'first', 20);
+    await setNote('remote-1', 'second', 25);
+    await settleNote('remote-1', 20, { note: 'first', noteUpdatedAt: 20 });
+    expect(await getSave('remote-1')).toMatchObject({ note: 'second', notePending: true });
+  });
+
+  it("takes notes edited elsewhere, but never over this device's waiting edit", async () => {
+    await synced();
+    expect((await getSave('remote-1'))?.note).toBe('from the server');
+    const edited = { note: 'edited on the laptop', note_updated_at: '2026-10-04T00:00:00.000Z' };
+    expect(await storeRemoteNote('remote-1', edited)).toBe(true);
+    expect((await getSave('remote-1'))?.note).toBe('edited on the laptop');
+
+    await setNote('remote-1', 'typed here', 50);
+    expect(await storeRemoteNote('remote-1', { ...edited, note: 'other' })).toBe(false);
+    await storeRemoteSave(row({ note: 'other', captured_at: '2026-10-05T00:00:00.000Z' }), {
+      card: new Blob(['c']),
+      full: null,
+    });
+    expect(await getSave('remote-1')).toMatchObject({ note: 'typed here', notePending: true });
+  });
+
+  it('keeps the note through a re-save', async () => {
+    await synced();
+    await setNote('remote-1', 'keep me', 20);
+    await upsertSnapshot(snapshot({ now: 9_000_000_000_000 }));
+    expect(await getSave('remote-1')).toMatchObject({ note: 'keep me', notePending: true });
   });
 });

@@ -20,6 +20,7 @@ export interface Candidate {
   description: string | null;
   recall_phrases: string[] | null;
   tags: string[] | null;
+  note: string | null;
 }
 
 export interface SearchResult {
@@ -34,7 +35,7 @@ export interface SearchResponse {
   degraded: string[];
 }
 
-/** The text the reranker compares with the query: description, recall phrases and tags. */
+/** The text the reranker compares with the query: description, recall phrases, tags and note. */
 export function rerankDocument(candidate: Candidate): string {
   return searchText({
     title: candidate.title,
@@ -42,6 +43,7 @@ export function rerankDocument(candidate: Candidate): string {
     description: candidate.description,
     recallPhrases: candidate.recall_phrases,
     tags: candidate.tags,
+    note: candidate.note,
   });
 }
 
