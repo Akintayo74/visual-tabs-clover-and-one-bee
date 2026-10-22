@@ -1,0 +1,50 @@
+name: Deploy
+
+# Sets up or updates the hosted Supabase project on demand: Actions > Deploy > Run workflow.
+# Applies new migrations, sets the model keys as Edge Function secrets and deploys the
+# functions. It reads these from the repository settings (Settings > Secrets and variables >
+# Actions):
+#   variable SUPABASE_PROJECT_REF   the project's ref (in its dashboard URL)
+#   secret   SUPABASE_ACCESS_TOKEN  a personal access token (supabase.com/dashboard/account/tokens)
+#   secret   SUPABASE_DB_PASSWORD   the database password chosen when creating the project
+#   secret   ANTHROPIC_API_KEY, VOYAGE_API_KEY  the model keys; never go in the extension
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check settings
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+        run: |
+          missing=0
+          for name in PROJECT_REF SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD ANTHROPIC_API_KEY VOYAGE_API_KEY; do
+            if [ -z "${!name}" ]; then echo "::error::$name is not set"; missing=1; fi
+          done
+          exit $missing
+      - run: pnpm exec supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+      - run: pnpm exec supabase db push --password "$SUPABASE_DB_PASSWORD"
+      - name: Set Edge Function secrets
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+        run: |
+          secrets_file="$RUNNER_TEMP/functions.env"
+          printf 'ANTHROPIC_API_KEY=%s\nVOYAGE_API_KEY=%s\n' "$ANTHROPIC_API_KEY" "$VOYAGE_API_KEY" > "$secrets_file"
+          pnpm exec supabase secrets set --project-ref "$PROJECT_REF" --env-file "$secrets_file"
+          rm "$secrets_file"
+      - run: pnpm exec supabase functions deploy process-save search --project-ref "$PROJECT_REF"

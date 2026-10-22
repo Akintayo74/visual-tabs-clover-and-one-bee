@@ -164,6 +164,7 @@ Each phase ends with something usable and a short checklist that must pass befor
 - Personal note per save, included in search.
 - Density toggle; empty states; error states reviewed.
 - Package the extension for easy install by the trial user.
+  - *Phase 5:* "More like this" ranks by the stored embeddings, so it costs no model call; colour filters match colour families of a save's main colours; the date filter uses when a site was first saved. Notes sync between devices (latest edit wins) and are searched but not embedded. The trial build is a zip loaded unpacked (steps in INSTALL.md) with a fixed extension id, so updates keep the local library. A Chrome Web Store listing (unlisted) would give one-click install and auto-updates but needs a developer account and review; revisit after the trial.
 
 **Done when:** our user can use it daily without help.
 

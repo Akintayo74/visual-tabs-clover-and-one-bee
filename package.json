@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "pnpm --filter extension dev",
     "build": "pnpm --filter extension build",
+    "package": "pnpm --filter extension package",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

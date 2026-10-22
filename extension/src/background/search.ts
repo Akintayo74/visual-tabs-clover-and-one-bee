@@ -1,4 +1,5 @@
 import type { SearchResults } from '@/src/lib/search';
+import { SIMILAR_COUNT } from '@/src/lib/similar';
 import { supabase, syncConfigured } from './supabase';
 
 interface SearchResponse {
@@ -31,4 +32,21 @@ export async function logSearchClick(query: string, id: string, rank: number): P
     .insert({ query: query.slice(0, 500), clicked_save_id: id, rank });
   // A save that never reached the server can't be referenced; that's fine to drop.
   if (error) console.warn('[search] could not log the click', error.message);
+}
+
+/**
+ * "More like this": the signed-in user's saves nearest to `id` by stored embedding, closest
+ * first. No model call; it compares embeddings the server already has. Empty when the save
+ * hasn't been described yet; null when signed out.
+ */
+export async function similarRemote(id: string): Promise<string[] | null> {
+  if (!syncConfigured) return null;
+  const { data: session } = await supabase().auth.getSession();
+  if (!session.session) return null;
+  const { data, error } = (await supabase().rpc('similar_saves', {
+    save_id: id,
+    match_count: SIMILAR_COUNT,
+  })) as { data: { id: string }[] | null; error: { message: string } | null };
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => r.id);
 }

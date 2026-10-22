@@ -9,7 +9,7 @@ import {
   startImport,
 } from '@/src/background/import';
 import { processSave, resumeProcessing, saveTab } from '@/src/background/save';
-import { logSearchClick, searchRemote } from '@/src/background/search';
+import { logSearchClick, searchRemote, similarRemote } from '@/src/background/search';
 import { setSimulatedOffline } from '@/src/background/supabase';
 import {
   downloadMissingFullImages,
@@ -97,6 +97,8 @@ export default defineBackground(() => {
         return null;
       case 'search':
         return searchRemote(msg.query);
+      case 'similar':
+        return similarRemote(msg.id);
       case 'search-click':
         await logSearchClick(msg.query, msg.id, msg.rank);
         return null;

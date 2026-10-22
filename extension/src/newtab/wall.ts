@@ -2,8 +2,9 @@ import { getDisplayImage } from '@/src/lib/db';
 import type { SaveRecord } from '@/src/lib/types';
 import { displayDomain } from '@/src/lib/url';
 import {
-  columnsForWidth,
+  columnsFor,
   computeLayout,
+  type Density,
   nextIndex,
   visibleRows,
   type Layout,
@@ -74,6 +75,7 @@ export class Wall {
   private focusedIndex = -1;
   private frame = 0;
   private signedIn = false;
+  private density: Density = null;
 
   constructor(
     private readonly container: HTMLElement,
@@ -111,6 +113,13 @@ export class Wall {
     if (signedIn === this.signedIn) return;
     this.signedIn = signedIn;
     this.render();
+  }
+
+  /** Cards per row: 2, 3 or 4, or null to fit the window. */
+  setDensity(density: Density): void {
+    if (density === this.density) return;
+    this.density = density;
+    this.relayout();
   }
 
   get count(): number {
@@ -153,7 +162,7 @@ export class Wall {
       this.saves.map((s) => ({ aspect: s.width > 0 ? s.height / s.width : 0 })),
       {
         width,
-        columns: columnsForWidth(width),
+        columns: columnsFor(width, this.density, GAP),
         gap: GAP,
         metaHeight: META_HEIGHT,
         maxAspect: MAX_ASPECT,

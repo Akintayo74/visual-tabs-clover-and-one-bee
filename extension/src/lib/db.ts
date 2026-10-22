@@ -173,6 +173,8 @@ export async function upsertSnapshot(
     palette: snapshot.palette,
     fonts: snapshot.fonts,
     note: existing?.note ?? null,
+    noteUpdatedAt: existing?.noteUpdatedAt ?? null,
+    notePending: existing?.notePending ?? false,
     // A new snapshot needs uploading. The server's copy (if any) is kept for reconciling.
     syncState: 'pending',
     sync: freshSync(existing?.sync.remote ?? null),
@@ -416,7 +418,7 @@ export async function storeRemoteSave(
     height: row.height ?? 0,
     palette: row.palette,
     fonts: row.fonts,
-    note: row.note ?? previous?.note ?? null,
+    ...noteFromServer(row, previous),
     syncState: 'synced',
     sync: freshSync(remoteRef(row)),
     understanding: understandingOf(row),
@@ -430,6 +432,86 @@ export async function storeRemoteSave(
   }
   await tx.done;
   return true;
+}
+
+/** The note to keep when storing the server's row: an edit not yet uploaded wins. */
+function noteFromServer(
+  row: Pick<RemoteSave, 'note' | 'note_updated_at'>,
+  local: SaveRecord | undefined,
+): Pick<SaveRecord, 'note' | 'noteUpdatedAt' | 'notePending'> {
+  if (local?.notePending) {
+    return { note: local.note, noteUpdatedAt: local.noteUpdatedAt ?? null, notePending: true };
+  }
+  return {
+    note: row.note,
+    noteUpdatedAt: row.note_updated_at ? Date.parse(row.note_updated_at) : null,
+    notePending: false,
+  };
+}
+
+/** Edits a save's note on this device; sync uploads it. Returns the updated save. */
+export async function setNote(
+  id: string,
+  note: string,
+  editedAt: number,
+): Promise<SaveRecord | undefined> {
+  const db = await getDb();
+  const tx = db.transaction('saves', 'readwrite');
+  const record = await tx.store.get(id);
+  let updated: SaveRecord | undefined;
+  if (record) {
+    const cleaned = note.trim() || null;
+    updated = { ...record, note: cleaned, noteUpdatedAt: editedAt, notePending: true };
+    await tx.store.put(updated);
+  }
+  await tx.done;
+  return updated;
+}
+
+/** Saves with a note edit to upload. Only saves the server already has can take a note. */
+export async function listPendingNotes(): Promise<SaveRecord[]> {
+  const all = await (await getDb()).getAll('saves');
+  return all.filter((s) => s.notePending && s.sync.remote !== null);
+}
+
+/**
+ * Records the server's answer to a note upload of the edit made at `editedAt`. Leaves the
+ * save alone if the note was edited again since. Returns whether the stored note changed.
+ */
+export async function settleNote(
+  id: string,
+  editedAt: number,
+  server: { note: string | null; noteUpdatedAt: number | null } | null,
+): Promise<boolean> {
+  const db = await getDb();
+  const tx = db.transaction('saves', 'readwrite');
+  const record = await tx.store.get(id);
+  let changed = false;
+  if (record?.notePending && record.noteUpdatedAt === editedAt) {
+    // null: the server no longer has the save; it will be removed here by the next pull.
+    const next = server ?? { note: record.note, noteUpdatedAt: record.noteUpdatedAt };
+    changed = next.note !== record.note;
+    await tx.store.put({ ...record, ...next, notePending: false });
+  }
+  await tx.done;
+  return changed;
+}
+
+/** Applies a note edited on another device, unless this device has its own edit waiting. */
+export async function storeRemoteNote(
+  id: string,
+  row: Pick<RemoteSave, 'note' | 'note_updated_at'>,
+): Promise<boolean> {
+  const db = await getDb();
+  const tx = db.transaction('saves', 'readwrite');
+  const record = await tx.store.get(id);
+  let changed = false;
+  if (record && !record.notePending && record.note !== row.note) {
+    await tx.store.put({ ...record, ...noteFromServer(row, record) });
+    changed = true;
+  }
+  await tx.done;
+  return changed;
 }
 
 /** Stores the server's processing state and output for a save. */

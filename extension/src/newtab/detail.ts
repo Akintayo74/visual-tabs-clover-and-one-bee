@@ -1,10 +1,13 @@
-import { deleteSave, getDisplayImage, getFingerprint } from '@/src/lib/db';
+import { deleteSave, getDisplayImage, getFingerprint, setNote } from '@/src/lib/db';
 import { publish } from '@/src/lib/events';
 import type { Fingerprint, SaveRecord } from '@/src/lib/types';
 import { displayDomain } from '@/src/lib/url';
 import { faviconUrl } from './wall';
 
 const CONFIRM_WINDOW_MS = 4000;
+/** Typing pauses this long before the note is stored. */
+const NOTE_SAVE_DELAY_MS = 600;
+export const NOTE_MAX_LENGTH = 4000;
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -59,6 +62,9 @@ export interface DetailCallbacks {
   onRetry(save: SaveRecord): void;
   onRetryUnderstanding(save: SaveRecord): void;
   onDeleted(save: SaveRecord): void;
+  /** A note was stored on this device and needs uploading. */
+  onNoteSaved(save: SaveRecord): void;
+  onMoreLikeThis(save: SaveRecord): void;
 }
 
 /** The detail view: full screenshot, what we know about the page, and its actions. */
@@ -66,6 +72,8 @@ export class Detail {
   private readonly dialog: HTMLDialogElement;
   private objectUrl: string | null = null;
   private current: SaveRecord | null = null;
+  /** Stores a note edit still waiting for typing to pause; run when the dialog closes. */
+  private flushNote: (() => Promise<void>) | null = null;
 
   constructor(private readonly callbacks: DetailCallbacks) {
     this.dialog = el('dialog', { className: 'detail' });
@@ -79,7 +87,7 @@ export class Detail {
     });
     this.dialog.addEventListener('keydown', (event) => {
       const target = event.target as HTMLElement;
-      if (event.key === 'Enter' && !target.closest('button, a') && this.current) {
+      if (event.key === 'Enter' && !target.closest('button, a, textarea') && this.current) {
         event.preventDefault();
         window.location.href = this.current.url;
       }
@@ -126,18 +134,38 @@ export class Detail {
         return;
       }
       clearTimeout(confirmTimer);
-      void deleteSave(save.id).then(() => {
-        publish({ type: 'deleted', id: save.id });
-        this.callbacks.onDeleted(save);
-        this.dialog.close();
-      });
+      del.disabled = true;
+      deleteSave(save.id).then(
+        () => {
+          publish({ type: 'deleted', id: save.id });
+          this.callbacks.onDeleted(save);
+          this.dialog.close();
+        },
+        (error: unknown) => {
+          console.error('[delete] failed', error);
+          del.disabled = false;
+          del.classList.remove('confirming');
+          del.textContent = "Couldn't delete. Try again";
+        },
+      );
     });
     const close = el('button', { type: 'button', className: 'button', textContent: 'Close' });
     close.addEventListener('click', () => {
       this.dialog.close();
     });
 
-    const actions = el('div', { className: 'detail-actions' }, [open, del, close]);
+    const similar = el('button', {
+      type: 'button',
+      className: 'button',
+      textContent: 'More like this',
+    });
+    similar.dataset.testid = 'more-like-this';
+    similar.addEventListener('click', () => {
+      this.dialog.close();
+      this.callbacks.onMoreLikeThis(save);
+    });
+
+    const actions = el('div', { className: 'detail-actions' }, [open, similar, del, close]);
     if (save.status === 'failed') {
       const retry = el('button', { type: 'button', className: 'button', textContent: 'Retry' });
       retry.addEventListener('click', () => {
@@ -172,6 +200,7 @@ export class Detail {
     ]);
 
     const facts = el('dl', { className: 'detail-facts' });
+    facts.append(row('Your note', this.noteEditor(save)));
     facts.append(row('Saved', new Date(save.updatedAt).toLocaleString()));
     if (save.status !== 'ready') {
       facts.append(
@@ -245,7 +274,6 @@ export class Detail {
     } else {
       facts.append(row('Structure', 'Not captured for this save'));
     }
-    if (save.note) facts.append(row('Note', save.note));
 
     this.dialog.replaceChildren(
       header,
@@ -258,7 +286,57 @@ export class Detail {
     open.focus();
   }
 
+  /** The note box: stored on this device as you type, then backed up by sync. */
+  private noteEditor(save: SaveRecord): HTMLElement {
+    const input = el('textarea', {
+      className: 'note-input',
+      value: save.note ?? '',
+      placeholder: 'Why you saved it, who it was for, what to borrow from it…',
+      rows: 3,
+      maxLength: NOTE_MAX_LENGTH,
+    });
+    input.dataset.testid = 'note';
+    input.setAttribute('aria-label', 'Your note');
+    const status = el('div', { className: 'note-status muted' });
+    status.dataset.testid = 'note-status';
+    status.setAttribute('aria-live', 'polite');
+    if (save.notePending) status.textContent = 'Saved on this device; backs up when online.';
+
+    let stored = save.note ?? '';
+    let timer = 0;
+    const store = async (): Promise<void> => {
+      clearTimeout(timer);
+      const text = input.value.trim();
+      if (text === stored) return;
+      stored = text;
+      try {
+        const updated = await setNote(save.id, text, Date.now());
+        if (!updated) {
+          status.textContent = 'This save was deleted, so the note was not kept.';
+          return;
+        }
+        status.textContent = 'Saved.';
+        publish({ type: 'changed', id: save.id });
+        this.callbacks.onNoteSaved(updated);
+      } catch (error) {
+        stored = '';
+        console.error('[note] could not store', error);
+        status.textContent = `Couldn't save the note: ${error instanceof Error ? error.message : String(error)}`;
+      }
+    };
+    input.addEventListener('input', () => {
+      status.textContent = '';
+      clearTimeout(timer);
+      timer = window.setTimeout(() => void store(), NOTE_SAVE_DELAY_MS);
+    });
+    input.addEventListener('blur', () => void store());
+    this.flushNote = store;
+    return el('div', { className: 'note' }, [input, status]);
+  }
+
   private cleanup(): void {
+    if (this.flushNote) void this.flushNote();
+    this.flushNote = null;
     if (this.objectUrl) URL.revokeObjectURL(this.objectUrl);
     this.objectUrl = null;
   }

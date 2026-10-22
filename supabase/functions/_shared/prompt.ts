@@ -171,10 +171,13 @@ export function searchText(input: {
   description: string | null;
   recallPhrases: string[] | null;
   tags: string[] | null;
+  /** The user's own note, when there is one (search only; notes aren't embedded). */
+  note?: string | null;
 }): string {
   const name = [input.siteName, input.title].filter(Boolean).join(' — ');
   return [
     name,
+    input.note ? `Note: ${input.note}` : '',
     (input.recallPhrases ?? []).join('\n'),
     input.tags?.length ? `Tags: ${input.tags.join(', ')}` : '',
     input.description ?? '',

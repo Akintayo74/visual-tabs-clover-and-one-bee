@@ -20,6 +20,14 @@
           </button>
           <button
             type="button"
+            class="button help-trigger"
+            data-testid="help-trigger"
+            aria-expanded="false"
+          >
+            Help
+          </button>
+          <button
+            type="button"
             class="button account-trigger"
             data-testid="account-trigger"
             hidden
@@ -39,9 +47,22 @@
         />
         <span class="search-status" data-testid="search-status" aria-live="polite"></span>
       </div>
+      <div class="toolbar">
+        <div class="similar-banner" data-testid="similar-banner" hidden>
+          <span class="similar-label"></span>
+          <button type="button" class="link-button similar-exit">Back to everything</button>
+        </div>
+        <div class="filters" data-testid="filters"></div>
+        <div class="density" role="group" aria-label="Sites per row" data-testid="density"></div>
+      </div>
+      <p class="notice" data-testid="notice" role="alert" hidden></p>
+      <section class="help" data-testid="help" hidden></section>
       <section class="account" data-testid="account" hidden></section>
       <section class="import" data-testid="import" aria-live="polite" hidden></section>
-      <p class="empty" data-testid="empty" hidden></p>
+      <div class="empty" data-testid="empty" hidden>
+        <p class="empty-text"></p>
+        <button type="button" class="button empty-action" hidden></button>
+      </div>
       <div class="wall" data-testid="wall"></div>
     </main>
     <script type="module" src="./main.ts"></script>

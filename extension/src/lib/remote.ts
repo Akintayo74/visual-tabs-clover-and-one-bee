@@ -21,6 +21,7 @@ export interface RemoteSave {
   palette: string[];
   fonts: string[];
   note: string | null;
+  note_updated_at: string | null;
   status: Understanding['status'];
   error: string | null;
   description: string | null;
@@ -32,7 +33,7 @@ export interface RemoteSave {
 export const REMOTE_COLUMNS =
   'id,dedupe_key,url,canonical_url,title,site_name,favicon_url,created_at,captured_at,' +
   'updated_at,deleted_at,image_full_path,image_card_path,width,height,fingerprint,palette,' +
-  'fonts,note,status,error,description,recall_phrases,tags';
+  'fonts,note,note_updated_at,status,error,description,recall_phrases,tags';
 
 export function understandingOf(row: RemoteSave): Understanding {
   return {
@@ -52,6 +53,16 @@ export function sameUnderstanding(a: Understanding | undefined, b: Understanding
     a.recallPhrases.join('\n') === b.recallPhrases.join('\n') &&
     a.tags.join('\n') === b.tags.join('\n')
   );
+}
+
+/** What public.set_note returns. */
+export interface NoteResult {
+  /** False when the save is gone from the server (deleted, or never uploaded). */
+  found: boolean;
+  /** True when this edit is the one now stored; false when a later edit already was. */
+  applied: boolean;
+  note: string | null;
+  note_updated_at: string | null;
 }
 
 /** What public.upsert_save returns. */

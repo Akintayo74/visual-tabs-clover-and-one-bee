@@ -8,6 +8,7 @@ import {
   getSaveByDedupeKey,
   listDeletions,
   listMissingFullImages,
+  listPendingNotes,
   listUploadQueue,
   markDeletionFailed,
   markSynced,
@@ -16,7 +17,9 @@ import {
   remoteRef,
   removeDeletion,
   resetForNewAccount,
+  settleNote,
   storeFullImage,
+  storeRemoteNote,
   storeRemoteSave,
   storeUnderstanding,
   type RemoteImages,
@@ -28,6 +31,7 @@ import {
   SCREENSHOT_BUCKET,
   sameUnderstanding,
   understandingOf,
+  type NoteResult,
   type RemoteSave,
   type UpsertResult,
 } from '@/src/lib/remote';
@@ -162,6 +166,7 @@ async function runSync(): Promise<void> {
   try {
     await pushDeletions();
     await pushUploads(userId);
+    await pushNotes();
     await pull(userId);
     await downloadMissingFullImages();
     await setStatus({ phase: 'idle', error: null, lastSyncedAt: Date.now() });
@@ -309,6 +314,36 @@ async function upload(userId: string, save: SaveRecord): Promise<void> {
   if (row.id !== save.id) publish({ type: 'deleted', id: save.id });
 }
 
+/**
+ * Uploads note edits. The latest edit wins across devices, so an edit that lost to a later
+ * one from another device takes that one instead.
+ */
+async function pushNotes(): Promise<void> {
+  for (const save of await listPendingNotes()) {
+    const editedAt = save.noteUpdatedAt ?? Date.now();
+    try {
+      const result = check<NoteResult>(
+        await supabase().rpc('set_note', {
+          save_id: save.id,
+          new_note: save.note ?? '',
+          edited_at: new Date(editedAt).toISOString(),
+        }),
+      );
+      const server = result.found
+        ? {
+            note: result.note,
+            noteUpdatedAt: result.note_updated_at ? Date.parse(result.note_updated_at) : null,
+          }
+        : null;
+      if (await settleNote(save.id, editedAt, server)) publish({ type: 'changed', id: save.id });
+    } catch (error) {
+      if (error instanceof OfflineError) throw error;
+      // Stays pending; the next sync (at the latest the periodic one) tries again.
+      console.warn('[sync] note upload failed', save.url, error);
+    }
+  }
+}
+
 // ---- Download ----------------------------------------------------------------------------
 
 interface Cursor {
@@ -369,11 +404,16 @@ async function applyPulled(row: RemoteSave): Promise<void> {
   const sameKey = row.deleted_at ? undefined : await getSaveByDedupeKey(row.dedupe_key);
   const action = pullAction(row, local, sameKey);
   if (action === 'skip') {
-    // The snapshot is the same, but the server may have described it since.
-    if (local && !row.deleted_at && !sameUnderstanding(local.understanding, understandingOf(row))) {
+    // The snapshot is the same, but the server may have described it, or another device
+    // edited its note, since.
+    if (!local || row.deleted_at) return;
+    let changed = false;
+    if (!sameUnderstanding(local.understanding, understandingOf(row))) {
       await storeUnderstanding(row.id, understandingOf(row));
-      publish({ type: 'changed', id: row.id });
+      changed = true;
     }
+    if (await storeRemoteNote(row.id, row)) changed = true;
+    if (changed) publish({ type: 'changed', id: row.id });
     return;
   }
   if (action === 'delete-local') {

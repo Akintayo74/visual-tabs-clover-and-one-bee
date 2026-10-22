@@ -58,7 +58,7 @@ test('the search box filters the wall as you type, and / and Esc work', async ({
   await expect(wall.getByTestId('search-status')).toContainText('Sign in');
 
   await input.fill('nothing like this');
-  await expect(wall.getByTestId('empty')).toHaveText('No quick matches.');
+  await expect(wall.getByTestId('empty')).toContainText('No matches for “nothing like this”');
 
   await input.press('Escape');
   await expect(input).toHaveValue('');

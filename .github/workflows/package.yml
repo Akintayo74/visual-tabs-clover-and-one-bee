@@ -1,0 +1,28 @@
+name: Package
+
+# Builds the trial zip on demand: Actions > Package > Run workflow. The zip is attached to
+# the run. It reads the hosted project's URL and publishable key from repository variables
+# (Settings > Secrets and variables > Actions > Variables). Both are public values.
+on:
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm package
+        env:
+          WXT_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          WXT_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: visual-memory-chrome
+          path: extension/.output/visual-memory-*-chrome.zip
+          if-no-files-found: error

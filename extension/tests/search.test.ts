@@ -245,4 +245,77 @@ describe('SearchController', () => {
     expect(shown.at(-1)).toEqual(['webgl', 'shop']);
     expect(replaced.at(-1)).toBe(false);
   });
+
+  describe('More like this', () => {
+    const lookalike = save('lookalike', { fonts: ['Neue Haas Grotesk'] }, { tags: ['portfolio'] });
+    const notYet = save('not-yet', {}, { status: 'pending', tags: ['portfolio', 'one-page'] });
+    const library = [index, shop, webgl, lookalike, notYet];
+
+    it('shows local look-alikes at once, then the server’s nearest, keeping undescribed ones', async () => {
+      const similar = vi
+        .fn<(id: string) => Promise<string[] | null>>()
+        .mockResolvedValue(['webgl', 'lookalike']);
+      const controller = new SearchController(view, () => Promise.resolve(null), 10, similar);
+      controller.setSaves(library);
+      controller.showSimilar(index);
+      expect(controller.similarTo?.id).toBe('index');
+      expect(shown.at(-1)).toEqual(['lookalike', 'not-yet']);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(similar).toHaveBeenCalledWith('index');
+      expect(shown.at(-1)).toEqual(['webgl', 'lookalike', 'not-yet']);
+      expect(replaced.at(-1)).toBe(true);
+      expect(status).toBe('Closest first.');
+    });
+
+    it('falls back to local look-alikes and says why', async () => {
+      const signedOut = new SearchController(
+        view,
+        () => Promise.resolve(null),
+        10,
+        () => Promise.resolve(null),
+      );
+      signedOut.setSaves(library);
+      signedOut.showSimilar(index);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(shown.at(-1)).toEqual(['lookalike', 'not-yet']);
+      expect(status).toMatch(/Sign in/);
+
+      const undescribed = new SearchController(
+        view,
+        () => Promise.resolve(null),
+        10,
+        () => Promise.resolve([]),
+      );
+      undescribed.setSaves(library);
+      undescribed.showSimilar(notYet);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(shown.at(-1)).toEqual(['index', 'lookalike']);
+      expect(status).toMatch(/until this save is described/);
+    });
+
+    it('ends when a search is typed, when cleared, or when the save is deleted', async () => {
+      const controller = new SearchController(
+        view,
+        () => Promise.resolve(null),
+        10,
+        () => Promise.resolve([]),
+      );
+      controller.setSaves(library);
+      controller.showSimilar(index);
+      controller.setQuery('pottery');
+      expect(controller.similarTo).toBeNull();
+      expect(shown.at(-1)).toEqual(['shop']);
+
+      controller.setQuery('');
+      controller.showSimilar(index);
+      controller.showSimilar(null);
+      expect(shown.at(-1)).toBeNull();
+
+      controller.showSimilar(index);
+      controller.setSaves([shop, webgl]);
+      expect(controller.similarTo).toBeNull();
+      expect(shown.at(-1)).toBeNull();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+  });
 });
