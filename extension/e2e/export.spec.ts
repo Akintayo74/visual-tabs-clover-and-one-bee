@@ -19,7 +19,7 @@ test('Export downloads a zip of every save with its images', async ({
   const download = wall.waitForEvent('download');
   await wall.getByTestId('export-trigger').click();
   const file = await download;
-  expect(file.suggestedFilename()).toMatch(/^visual-memory-export-\d{4}-\d{2}-\d{2}\.zip$/);
+  expect(file.suggestedFilename()).toMatch(/^visual-tabs-export-\d{4}-\d{2}-\d{2}\.zip$/);
 
   const files = unzipSync(new Uint8Array(await readFile(await file.path())));
   const manifest = JSON.parse(strFromU8(files['saves.json'] ?? new Uint8Array())) as {

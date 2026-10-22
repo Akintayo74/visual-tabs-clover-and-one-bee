@@ -1,4 +1,4 @@
-# Visual Memory — Plan
+# Visual Tabs — Plan
 
 *Working title. Rename freely.*
 

@@ -1,25 +1,25 @@
-# Installing Visual Memory
+# Installing Visual Tabs
 
-Visual Memory saves a website exactly as it looks, and your new tab becomes a wall of everything
+Visual Tabs saves a website exactly as it looks, and your new tab becomes a wall of everything
 you've saved. You find a site again by describing what you remember about it.
 
 This takes about five minutes. You need Google Chrome on a computer.
 
 ## 1. Install it
 
-1. Unzip the file you were sent (`visual-memory-….zip`) into a folder you'll keep, for example
-   **Documents › Visual Memory**. Chrome runs the extension from this folder, so don't delete or
+1. Unzip the file you were sent (`visual-tabs-….zip`) into a folder you'll keep, for example
+   **Documents › Visual Tabs**. Chrome runs the extension from this folder, so don't delete or
    move it afterwards.
 2. In Chrome, go to `chrome://extensions` (type it in the address bar).
 3. Turn on **Developer mode** (top right).
 4. Click **Load unpacked** and choose the folder from step 1 (the one that contains
    `manifest.json`).
-5. Click the puzzle-piece icon to the right of the address bar and pin **Visual Memory**, so its
+5. Click the puzzle-piece icon to the right of the address bar and pin **Visual Tabs**, so its
    button is always in the toolbar.
 6. Open a new tab. Chrome asks whether to keep the new-tab page this extension added: choose
    **Keep it**.
 
-If Chrome ever suggests turning off extensions in developer mode, choose to keep Visual Memory.
+If Chrome ever suggests turning off extensions in developer mode, choose to keep Visual Tabs.
 
 ## 2. Turn on backup
 
@@ -70,7 +70,7 @@ Nothing you save is lost if a step fails: the save stays on your computer until 
 ## Updating to a new version
 
 Unzip the new version into the **same folder**, replacing the files. Then go to
-`chrome://extensions` and click the reload icon on Visual Memory. Your saves stay. (Loading it
+`chrome://extensions` and click the reload icon on Visual Tabs. Your saves stay. (Loading it
 from a different folder with **Load unpacked** also keeps them.)
 
 ## Something's wrong?

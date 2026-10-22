@@ -12,9 +12,9 @@ const PACKAGED_KEY =
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
-  zip: { artifactTemplate: 'visual-memory-{{version}}-chrome.zip' },
+  zip: { artifactTemplate: 'visual-tabs-{{version}}-chrome.zip' },
   manifest: ({ mode }) => ({
-    name: 'Visual Memory',
+    name: 'Visual Tabs',
     ...(mode === 'production' ? { key: PACKAGED_KEY } : {}),
     description:
       'Save sites exactly as they looked and find them again by describing what you saw.',

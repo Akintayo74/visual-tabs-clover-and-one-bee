@@ -23,6 +23,6 @@ jobs:
           WXT_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
       - uses: actions/upload-artifact@v7
         with:
-          name: visual-memory-chrome
-          path: extension/.output/visual-memory-*-chrome.zip
+          name: visual-tabs-chrome
+          path: extension/.output/visual-tabs-*-chrome.zip
           if-no-files-found: error

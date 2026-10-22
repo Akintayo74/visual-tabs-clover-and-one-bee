@@ -17,6 +17,7 @@ import type {
 } from './types';
 import { dedupeKey } from './url';
 
+// The product was first called Visual Memory; renaming the database would orphan saved libraries.
 export const DB_NAME = 'visual-memory';
 const DB_VERSION = 3;
 
